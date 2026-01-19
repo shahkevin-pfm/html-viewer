@@ -1,0 +1,4801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M24+ User Analysis Dashboard - Micro-Segment Deep Dive</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a365d;
+            --primary-light: #2c5282;
+            --secondary: #4a90a4;
+            --accent: #e8b04b;
+            --accent-light: #f6e05e;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-card-hover: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border: #334155;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 50%, var(--secondary) 100%);
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 3px solid var(--accent);
+        }
+        
+        .header h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            justify-content: center;
+        }
+        
+        .nav-tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .nav-tab:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+        
+        .nav-tab.active {
+            background: linear-gradient(135deg, var(--secondary), var(--primary-light));
+            color: white;
+            border-color: var(--secondary);
+        }
+        
+        .content { padding: 2rem; max-width: 1600px; margin: 0 auto; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .section-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+        
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .kpi-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .kpi-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .kpi-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .kpi-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .chart-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+        
+        .chart-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        
+        .chart-container { height: 300px; position: relative; }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
+        
+        .data-table th {
+            background: var(--primary-light);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
+        .data-table td {
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .data-table tr:hover td {
+            background: var(--bg-card-hover);
+        }
+        
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 1.5rem;
+        }
+        
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .filter-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .filter-select {
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--secondary);
+        }
+        
+        .insight-card {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card-hover) 100%);
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1rem;
+        }
+        
+        .insight-title {
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .insight-text {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        
+        .priority-high { border-left-color: var(--danger); }
+        .priority-high .insight-title { color: var(--danger); }
+        .priority-medium { border-left-color: var(--warning); }
+        .priority-medium .insight-title { color: var(--warning); }
+        .priority-low { border-left-color: var(--success); }
+        .priority-low .insight-title { color: var(--success); }
+        
+        .sub-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .sub-tab {
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        
+        .sub-tab:hover { background: var(--bg-card-hover); }
+        .sub-tab.active {
+            background: var(--secondary);
+            color: white;
+            border-color: var(--secondary);
+        }
+        
+        .micro-segment-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1rem;
+        }
+        
+        .micro-card {
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+        }
+        
+        .micro-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .micro-card-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--accent);
+        }
+        
+        .micro-card-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .micro-table {
+            width: 100%;
+            font-size: 0.75rem;
+        }
+        
+        .micro-table th {
+            padding: 0.4rem;
+            text-align: left;
+            color: var(--text-secondary);
+            font-weight: 500;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .micro-table td {
+            padding: 0.4rem;
+            color: var(--text-primary);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .badge-primary { background: var(--primary-light); color: white; }
+        .badge-secondary { background: var(--secondary); color: white; }
+        .badge-accent { background: var(--accent); color: var(--bg-dark); }
+        
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.75rem; }
+            .nav-tabs { padding: 0.75rem 1rem; }
+            .content { padding: 1rem; }
+            .charts-grid { grid-template-columns: 1fr; }
+            .micro-segment-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>M24+ User Analysis Dashboard</h1>
+        <p>Micro-Segment Deep Dive | December 2025 | Users with 24+ Months Tenure</p>
+    </div>
+    
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="showTab('overview')">Overview</button>
+        <button class="nav-tab" onclick="showTab('segments')">Segments</button>
+        <button class="nav-tab" onclick="showTab('demographics')">Demographics</button>
+        <button class="nav-tab" onclick="showTab('shows')">Top Shows</button>
+        <button class="nav-tab" onclick="showTab('discovery')">Discovery</button>
+        <button class="nav-tab" onclick="showTab('interventions')">Interventions</button>
+    </div>
+    
+    <div class="content">
+        <!-- OVERVIEW TAB -->
+        <div id="overview" class="tab-content active">
+            <h2 class="section-title">Key Performance Indicators</h2>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total M24+ Users</div>
+                    <div class="kpi-value">75.6M</div>
+                    <div class="kpi-sub">Installed before Dec 1, 2023</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Active Users (Dec)</div>
+                    <div class="kpi-value">1.69M</div>
+                    <div class="kpi-sub">2.24% activity rate</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Paying Users (Dec)</div>
+                    <div class="kpi-value">316.6K</div>
+                    <div class="kpi-sub">0.42% conversion rate</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Revenue</div>
+                    <div class="kpi-value">$5.48M</div>
+                    <div class="kpi-sub">December 2025</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">ARPU</div>
+                    <div class="kpi-value">$0.072</div>
+                    <div class="kpi-sub">Per M24+ user</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">ARPPU</div>
+                    <div class="kpi-value">$17.30</div>
+                    <div class="kpi-sub">Per paying user</div>
+                </div>
+            </div>
+            
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Revenue by Region</div>
+                    <div class="chart-container"><canvas id="revenueByRegionChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Users by Region</div>
+                    <div class="chart-container"><canvas id="usersByRegionChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Revenue by Segment</div>
+                    <div class="chart-container"><canvas id="revenueBySegmentChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">ARPPU by Region</div>
+                    <div class="chart-container"><canvas id="arppuByRegionChart"></canvas></div>
+                </div>
+            </div>
+            
+            <h2 class="section-title">Key Insights</h2>
+            <div class="insight-card priority-high">
+                <div class="insight-title">🎯 Lapsed Whale Opportunity - $27.7M Monthly Potential</div>
+                <div class="insight-text">1M+ Past Whale+ / Current Non-Payer users represent the largest revenue opportunity. These users historically spent $27.69/month. Reactivating 10% would generate $2.77M+ monthly.</div>
+            </div>
+            <div class="insight-card priority-high">
+                <div class="insight-title">📊 Activity Rate Critical - 2.24% Too Low</div>
+                <div class="insight-text">Only 2.24% of M24+ users are active in December. Target: 5%+. "Continue Listening" notifications and personalized recommendations can drive engagement.</div>
+            </div>
+            <div class="insight-card priority-medium">
+                <div class="insight-title">💰 USA = 6% Users, 67% Revenue</div>
+                <div class="insight-text">USA users have $75.90 ARPPU vs $4.85 for India. Focus retention efforts on USA while optimizing India pricing.</div>
+            </div>
+        </div>
+        
+        <!-- SEGMENTS TAB -->
+        <div id="segments" class="tab-content">
+            <h2 class="section-title">User Segment Analysis</h2>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Segment</th>
+                            <th>Users</th>
+                            <th>Active %</th>
+                            <th>Payer %</th>
+                            <th>Revenue</th>
+                            <th>ARPPU</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-primary">Whale+ / Current Payer</span></td>
+                            <td>122K</td>
+                            <td>99.8%</td>
+                            <td>100%</td>
+                            <td>$3.38M</td>
+                            <td>$27.69</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-secondary">Whale+ / Non-Payer (Lapsed)</span></td>
+                            <td>1.0M</td>
+                            <td>12.7%</td>
+                            <td>0%</td>
+                            <td>$0</td>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-accent">Non-Whale / Current Payer</span></td>
+                            <td>194K</td>
+                            <td>99.7%</td>
+                            <td>100%</td>
+                            <td>$2.09M</td>
+                            <td>$10.77</td>
+                        </tr>
+                        <tr>
+                            <td>Non-Whale / Non-Payer</td>
+                            <td>74.3M</td>
+                            <td>1.68%</td>
+                            <td>0%</td>
+                            <td>$0</td>
+                            <td>-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Users by Segment</div>
+                    <div class="chart-container"><canvas id="usersBySegmentChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Acquisition Show Completion by Segment</div>
+                    <div class="chart-container"><canvas id="completionBySegmentChart"></canvas></div>
+                </div>
+            </div>
+            
+            <h2 class="section-title">Segment Definitions</h2>
+            <div class="insight-card">
+                <div class="insight-title">Past Whale+ / Current Payer</div>
+                <div class="insight-text">Previously high-value users who continue paying. Most valuable retention targets. 62% of total revenue.</div>
+            </div>
+            <div class="insight-card priority-high">
+                <div class="insight-title">Past Whale+ / Current Non-Payer (LAPSED WHALES)</div>
+                <div class="insight-text">Previously high-value users who stopped paying. HIGHEST reactivation potential. 1M+ users with historical $27.69 ARPPU.</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-title">Past Non-Whale / Current Payer</div>
+                <div class="insight-text">Users who weren't high-value historically but are now paying. Growth segment with 38% of revenue.</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-title">Past Non-Whale / Current Non-Payer</div>
+                <div class="insight-text">Casual users who never paid significantly. Largest segment by volume (98% of users). Conversion opportunity.</div>
+            </div>
+        </div>
+        
+        <!-- DEMOGRAPHICS TAB -->
+        <div id="demographics" class="tab-content">
+            <h2 class="section-title">Regional Analysis</h2>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Region</th>
+                            <th>Users</th>
+                            <th>% of Total</th>
+                            <th>Active %</th>
+                            <th>Payer %</th>
+                            <th>Revenue</th>
+                            <th>% of Revenue</th>
+                            <th>ARPPU</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>USA</td>
+                            <td>4.3M</td>
+                            <td>5.7%</td>
+                            <td>3.1%</td>
+                            <td>1.12%</td>
+                            <td>$3.69M</td>
+                            <td>67.4%</td>
+                            <td>$75.90</td>
+                        </tr>
+                        <tr>
+                            <td>India</td>
+                            <td>65.8M</td>
+                            <td>87.1%</td>
+                            <td>2.1%</td>
+                            <td>0.39%</td>
+                            <td>$1.24M</td>
+                            <td>22.7%</td>
+                            <td>$4.85</td>
+                        </tr>
+                        <tr>
+                            <td>UK</td>
+                            <td>276K</td>
+                            <td>0.4%</td>
+                            <td>2.5%</td>
+                            <td>0.84%</td>
+                            <td>$144K</td>
+                            <td>2.6%</td>
+                            <td>$62.29</td>
+                        </tr>
+                        <tr>
+                            <td>Germany</td>
+                            <td>40K</td>
+                            <td>0.05%</td>
+                            <td>2.3%</td>
+                            <td>0.40%</td>
+                            <td>$9.2K</td>
+                            <td>0.2%</td>
+                            <td>$57.93</td>
+                        </tr>
+                        <tr>
+                            <td>RoW</td>
+                            <td>5.1M</td>
+                            <td>6.7%</td>
+                            <td>2.4%</td>
+                            <td>0.20%</td>
+                            <td>$392K</td>
+                            <td>7.2%</td>
+                            <td>$38.36</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <h2 class="section-title">Gender Analysis</h2>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Revenue by Gender</div>
+                    <div class="chart-container"><canvas id="revenueByGenderChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">ARPPU by Gender</div>
+                    <div class="chart-container"><canvas id="arppuByGenderChart"></canvas></div>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Gender</th>
+                            <th>Users</th>
+                            <th>Active %</th>
+                            <th>Payer %</th>
+                            <th>Revenue</th>
+                            <th>ARPPU</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Male</td>
+                            <td>45.3M (60%)</td>
+                            <td>2.3%</td>
+                            <td>0.44%</td>
+                            <td>$2.89M (53%)</td>
+                            <td>$14.54</td>
+                        </tr>
+                        <tr>
+                            <td>Female</td>
+                            <td>27.5M (36%)</td>
+                            <td>2.2%</td>
+                            <td>0.40%</td>
+                            <td>$2.59M (47%)</td>
+                            <td>$23.83</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="insight-card priority-medium">
+                <div class="insight-title">💎 Female ARPPU 64% Higher Than Male</div>
+                <div class="insight-text">Female users: $23.83 ARPPU vs Male: $14.54. Romantasy/Romance content resonates strongly with female audience. Investment in this genre drives revenue.</div>
+            </div>
+            
+            <h2 class="section-title">Age Group Analysis</h2>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Revenue by Age Group</div>
+                    <div class="chart-container"><canvas id="revenueByAgeChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">ARPPU by Age Group</div>
+                    <div class="chart-container"><canvas id="arppuByAgeChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TOP SHOWS TAB -->
+        <div id="shows" class="tab-content">
+            <h2 class="section-title">Top Paying Shows by Micro-Segment</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Top 5 revenue-generating shows for each Segment × Locale × Gender combination (Paying Segments Only)</p>
+            
+            <div class="filter-row">
+                <div class="filter-group">
+                    <span class="filter-label">Segment:</span>
+                    <select class="filter-select" id="showSegmentFilter" onchange="updateShowsDisplay()">
+                        <option value="all">All Paying Segments</option>
+                        <option value="whale">Whale+ / Current Payer</option>
+                        <option value="nonwhale">Non-Whale / Current Payer</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">Locale:</span>
+                    <select class="filter-select" id="showLocaleFilter" onchange="updateShowsDisplay()">
+                        <option value="all">All Regions</option>
+                        <option value="USA">USA</option>
+                        <option value="India">India</option>
+                        <option value="UK">UK</option>
+                        <option value="DE">Germany</option>
+                        <option value="RoW">Rest of World</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">Gender:</span>
+                    <select class="filter-select" id="showGenderFilter" onchange="updateShowsDisplay()">
+                        <option value="all">All Genders</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </div>
+            </div>
+            
+            <h3 class="section-title" style="font-size: 1.2rem;">Overall Top 10 Shows</h3>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Show</th>
+                            <th>Genre</th>
+                            <th>Revenue</th>
+                            <th>Rev %</th>
+                            <th>Users</th>
+                            <th>User %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topShowsOverallTable"></tbody>
+                </table>
+            </div>
+            
+            <h3 class="section-title" style="font-size: 1.2rem;">Micro-Segment Breakdown</h3>
+            <div id="microSegmentShowsContainer" class="micro-segment-grid"></div>
+        </div>
+        
+        <!-- DISCOVERY TAB -->
+        <div id="discovery" class="tab-content">
+            <h2 class="section-title">Discovery Source Analysis by Micro-Segment</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">How users discover paying content - breakdown by Segment × Locale × Gender</p>
+            
+            <div class="filter-row">
+                <div class="filter-group">
+                    <span class="filter-label">Segment:</span>
+                    <select class="filter-select" id="discSegmentFilter" onchange="updateDiscoveryDisplay()">
+                        <option value="all">All Paying Segments</option>
+                        <option value="whale">Whale+ / Current Payer</option>
+                        <option value="nonwhale">Non-Whale / Current Payer</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">Locale:</span>
+                    <select class="filter-select" id="discLocaleFilter" onchange="updateDiscoveryDisplay()">
+                        <option value="all">All Regions</option>
+                        <option value="USA">USA</option>
+                        <option value="India">India</option>
+                        <option value="UK">UK</option>
+                        <option value="DE">Germany</option>
+                        <option value="RoW">Rest of World</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">Gender:</span>
+                    <select class="filter-select" id="discGenderFilter" onchange="updateDiscoveryDisplay()">
+                        <option value="all">All Genders</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </div>
+            </div>
+            
+            <h3 class="section-title" style="font-size: 1.2rem;">Overall Discovery Sources</h3>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Revenue by Discovery Source</div>
+                    <div class="chart-container"><canvas id="revenueByDiscoveryChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Revenue per User by Discovery Source</div>
+                    <div class="chart-container"><canvas id="revPerUserDiscoveryChart"></canvas></div>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th>Users</th>
+                            <th>Revenue</th>
+                            <th>Rev %</th>
+                            <th>User %</th>
+                            <th>Rev/User</th>
+                        </tr>
+                    </thead>
+                    <tbody id="discoveryOverallTable"></tbody>
+                </table>
+            </div>
+            
+            <h3 class="section-title" style="font-size: 1.2rem;">Micro-Segment Breakdown</h3>
+            <div id="microSegmentDiscoveryContainer" class="micro-segment-grid"></div>
+        </div>
+        
+        <!-- INTERVENTIONS TAB -->
+        <div id="interventions" class="tab-content">
+            <h2 class="section-title">Strategic Interventions by Micro-Segment</h2>
+            
+            <div class="sub-tabs">
+                <button class="sub-tab active" onclick="showInterventionTab('lapsed')">Lapsed Whales (HIGH)</button>
+                <button class="sub-tab" onclick="showInterventionTab('activity')">Activity Rate (HIGH)</button>
+                <button class="sub-tab" onclick="showInterventionTab('conversion')">Payer Conversion (MEDIUM)</button>
+                <button class="sub-tab" onclick="showInterventionTab('content')">Content Strategy (MEDIUM)</button>
+                <button class="sub-tab" onclick="showInterventionTab('discovery')">Discovery Optimization</button>
+            </div>
+            
+            <div id="intervention-lapsed" class="intervention-content">
+                <div class="insight-card priority-high">
+                    <div class="insight-title">🎯 Priority 1: Reactivate Lapsed Whales</div>
+                    <div class="insight-text">Target: 1M+ Past Whale+ / Current Non-Payer users | Potential: ~$27.7M monthly revenue</div>
+                </div>
+                
+                <div class="micro-segment-grid">
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">USA - Female</span>
+                            <span class="badge badge-primary">Highest ARPPU</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Romantasy/Romance win-back campaigns (The Alpha's Bride)</li>
+                            <li>Series completion incentives for partially finished shows</li>
+                            <li>VIP early access to new Romance releases</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">USA - Male</span>
+                            <span class="badge badge-secondary">High Value</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Fantasy/LitRPG reactivation (My Vampire System, Shadow Slave)</li>
+                            <li>Premium content previews for high-ARPPU shows</li>
+                            <li>Time-limited discounts on previously purchased series</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">India - Male</span>
+                            <span class="badge badge-accent">High Volume</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Regional language content promotions (Hindi fantasy)</li>
+                            <li>Super Yoddha completion campaigns</li>
+                            <li>Price-sensitive offers (₹99 bundles)</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">India - Female</span>
+                            <span class="badge badge-accent">Growth Potential</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Romance/Drama localized content</li>
+                            <li>Social features for shared listening</li>
+                            <li>Family plan promotions</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">UK/DE - All</span>
+                            <span class="badge badge-secondary">Premium Market</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Premium tier with exclusive content</li>
+                            <li>Cross-promote trending US content</li>
+                            <li>Local narrator preference options</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">RoW - All</span>
+                            <span class="badge badge-secondary">Emerging</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Market-specific pricing tiers</li>
+                            <li>Regional content licensing</li>
+                            <li>Localization of top Romance/Fantasy titles</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="intervention-activity" class="intervention-content" style="display: none;">
+                <div class="insight-card priority-high">
+                    <div class="insight-title">📊 Priority 2: Improve Activity Rate</div>
+                    <div class="insight-text">Target: Increase from 2.24% to 5%+ activity rate across all segments</div>
+                </div>
+                
+                <div class="micro-segment-grid">
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">All Segments - Universal Actions</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>"Continue Listening" push notifications timed to historical patterns</li>
+                            <li>Personalized "For You" recommendations based on acquisition show</li>
+                            <li>Streak rewards and gamification (daily/weekly badges)</li>
+                            <li>Social features: "Friends are listening to..." notifications</li>
+                            <li>Seasonal re-engagement during holidays/events</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Lapsed Whales - Special Focus</span>
+                            <span class="badge badge-primary">12.7% Active</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Personalized "We miss you" campaigns</li>
+                            <li>Show updates for previously followed series</li>
+                            <li>Exclusive previews of upcoming content</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Non-Whale Non-Payers</span>
+                            <span class="badge badge-accent">1.68% Active</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Free content promotions</li>
+                            <li>Genre-specific re-engagement based on past activity</li>
+                            <li>Low-friction onboarding improvements</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="intervention-conversion" class="intervention-content" style="display: none;">
+                <div class="insight-card priority-medium">
+                    <div class="insight-title">💰 Priority 3: Increase Payer Conversion</div>
+                    <div class="insight-text">Target: Increase from 0.42% to 1%+ payer rate</div>
+                </div>
+                
+                <div class="micro-segment-grid">
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">USA</span>
+                            <span class="badge badge-primary">1.12% Payer Rate</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Optimize paywall at 10hr mark (key engagement threshold)</li>
+                            <li>First-purchase discount ($4.99 starter offer)</li>
+                            <li>Premium tier with exclusive content</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">India</span>
+                            <span class="badge badge-accent">0.39% Payer Rate</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Micro-transactions (₹19-₹49 episodic purchases)</li>
+                            <li>Regional payment methods (UPI, Paytm, PhonePe)</li>
+                            <li>Family/group plans for shared subscriptions</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">UK/DE</span>
+                            <span class="badge badge-secondary">Premium Potential</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Euro-optimized pricing</li>
+                            <li>Free trial extensions for high-engagement users</li>
+                            <li>Premium bundle offers</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">RoW</span>
+                            <span class="badge badge-secondary">0.20% Payer Rate</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Market-specific pricing (PPP adjustment)</li>
+                            <li>Local payment gateway integration</li>
+                            <li>Regional promotional campaigns</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="intervention-content" class="intervention-content" style="display: none;">
+                <div class="insight-card priority-medium">
+                    <div class="insight-title">📚 Priority 4: Content Strategy by Segment × Gender</div>
+                    <div class="insight-text">Target: Increase ARPU from $0.072 to $0.15 through content optimization</div>
+                </div>
+                
+                <div class="micro-segment-grid">
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Female Users - All Locales</span>
+                            <span class="badge badge-primary">$23.83 ARPPU</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Expand Romantasy catalog (highest revenue genre)</li>
+                            <li>Invest in "Alpha's Bride" style series</li>
+                            <li>Romance completion bonuses</li>
+                            <li>Female narrator options</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Male Users - USA/UK/DE</span>
+                            <span class="badge badge-secondary">Premium Fantasy</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Premium Fantasy/LitRPG content (Shadow Slave $119/payer)</li>
+                            <li>Progression fantasy with longer arcs</li>
+                            <li>Gaming-adjacent narratives</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Male Users - India</span>
+                            <span class="badge badge-accent">Localization</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Local language fantasy (Hindi, Tamil, Telugu)</li>
+                            <li>Mythology-based content (Super Yoddha success)</li>
+                            <li>Regional creator partnerships</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="intervention-discovery" class="intervention-content" style="display: none;">
+                <div class="insight-card">
+                    <div class="insight-title">🔍 Discovery Channel Optimization</div>
+                    <div class="insight-text">Optimize discovery channels based on revenue efficiency and user behavior</div>
+                </div>
+                
+                <div class="micro-segment-grid">
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Auto Play (37% Revenue)</span>
+                            <span class="badge badge-primary">$17.87/user</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Maintain as primary discovery channel</li>
+                            <li>Improve content sequencing algorithm</li>
+                            <li>A/B test auto-play timing and transitions</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">For You (28% Revenue)</span>
+                            <span class="badge badge-secondary">$17.25/user</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Enhance ML recommendation models</li>
+                            <li>Personalize based on genre preferences</li>
+                            <li>Time-of-day optimization</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Search (7.4% Revenue)</span>
+                            <span class="badge badge-accent">$21.57/user (Highest Intent)</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Optimize search results for conversion</li>
+                            <li>Implement smart autocomplete</li>
+                            <li>Show social proof in search results</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">My Library (4% Revenue)</span>
+                            <span class="badge badge-primary">$38.98/user</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Re-engagement for partially completed shows</li>
+                            <li>"Continue where you left off" prominence</li>
+                            <li>Library organization improvements</li>
+                        </ul>
+                    </div>
+                    <div class="micro-card">
+                        <div class="micro-card-header">
+                            <span class="micro-card-title">Show Reviews (0.1% Revenue)</span>
+                            <span class="badge badge-accent">$80.24/user (Highest Efficiency!)</span>
+                        </div>
+                        <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1.25rem;">
+                            <li>Scale social proof features</li>
+                            <li>Encourage user reviews</li>
+                            <li>Display ratings prominently</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Data from analysis
+        const microSegmentData = {
+  "overall": {
+    "total_users": 75583429,
+    "active_users": 1693649,
+    "paying_users": 316585,
+    "total_revenue": 5476096.89,
+    "active_rate": 2.24,
+    "payer_rate": 0.42,
+    "arpu": 0.0725,
+    "arppu": 17.3
+  },
+  "by_segment": [
+    {
+      "user_segment": "1. Past Whale+ / Current Payer",
+      "total_users": 122160,
+      "active_users_dec25": 121928,
+      "paying_users_dec25": 122160,
+      "total_revenue_dec25": 3382671.9809199995,
+      "active_rate": 99.81,
+      "payer_rate": 100.0,
+      "arppu": 27.69
+    },
+    {
+      "user_segment": "2. Past Whale+ / Current Non-Payer",
+      "total_users": 1002316,
+      "active_users_dec25": 127504,
+      "paying_users_dec25": 0,
+      "total_revenue_dec25": 0.0,
+      "active_rate": 12.72,
+      "payer_rate": 0.0,
+      "arppu": 0.0
+    },
+    {
+      "user_segment": "3. Past Non-Whale / Current Payer",
+      "total_users": 194425,
+      "active_users_dec25": 193752,
+      "paying_users_dec25": 194425,
+      "total_revenue_dec25": 2093424.90799,
+      "active_rate": 99.65,
+      "payer_rate": 100.0,
+      "arppu": 10.77
+    },
+    {
+      "user_segment": "4. Past Non-Whale / Current Non-Payer",
+      "total_users": 74264528,
+      "active_users_dec25": 1250465,
+      "paying_users_dec25": 0,
+      "total_revenue_dec25": 0.0,
+      "active_rate": 1.68,
+      "payer_rate": 0.0,
+      "arppu": 0.0
+    }
+  ],
+  "by_locale": [
+    {
+      "locale_bucket": "DE",
+      "total_users": 40418,
+      "active_users_dec25": 914,
+      "paying_users_dec25": 159,
+      "total_revenue_dec25": 9211.474250000007,
+      "active_rate": 2.26,
+      "payer_rate": 0.39,
+      "arppu": 57.93
+    },
+    {
+      "locale_bucket": "India",
+      "total_users": 65807465,
+      "active_users_dec25": 1402801,
+      "paying_users_dec25": 255237,
+      "total_revenue_dec25": 1238116.15226,
+      "active_rate": 2.13,
+      "payer_rate": 0.39,
+      "arppu": 4.85
+    },
+    {
+      "locale_bucket": "RoW",
+      "total_users": 5119595,
+      "active_users_dec25": 88200,
+      "paying_users_dec25": 10231,
+      "total_revenue_dec25": 392434.1814799999,
+      "active_rate": 1.72,
+      "payer_rate": 0.2,
+      "arppu": 38.36
+    },
+    {
+      "locale_bucket": "UK",
+      "total_users": 276425,
+      "active_users_dec25": 10621,
+      "paying_users_dec25": 2318,
+      "total_revenue_dec25": 144390.09130000003,
+      "active_rate": 3.84,
+      "payer_rate": 0.84,
+      "arppu": 62.29
+    },
+    {
+      "locale_bucket": "USA",
+      "total_users": 4339526,
+      "active_users_dec25": 191113,
+      "paying_users_dec25": 48640,
+      "total_revenue_dec25": 3691944.9896199997,
+      "active_rate": 4.4,
+      "payer_rate": 1.12,
+      "arppu": 75.9
+    }
+  ],
+  "by_gender": [
+    {
+      "gender": "Female",
+      "total_users": 26818725,
+      "active_users_dec25": 632240,
+      "paying_users_dec25": 93804,
+      "total_revenue_dec25": 2234883.67365,
+      "active_rate": 2.36,
+      "payer_rate": 0.35,
+      "arppu": 23.83
+    },
+    {
+      "gender": "Male",
+      "total_users": 44991675,
+      "active_users_dec25": 1046390,
+      "paying_users_dec25": 220868,
+      "total_revenue_dec25": 3212031.57007,
+      "active_rate": 2.33,
+      "payer_rate": 0.49,
+      "arppu": 14.54
+    }
+  ],
+  "by_age": [
+    {
+      "age_group": "13-18",
+      "total_users": 2267173,
+      "active_users_dec25": 46296,
+      "paying_users_dec25": 6016,
+      "total_revenue_dec25": 67732.75254,
+      "active_rate": 2.04,
+      "payer_rate": 0.27,
+      "arppu": 11.26
+    },
+    {
+      "age_group": "19-25",
+      "total_users": 19914649,
+      "active_users_dec25": 379770,
+      "paying_users_dec25": 64394,
+      "total_revenue_dec25": 589730.7028299998,
+      "active_rate": 1.91,
+      "payer_rate": 0.32,
+      "arppu": 9.16
+    },
+    {
+      "age_group": "26-35",
+      "total_users": 21836848,
+      "active_users_dec25": 521515,
+      "paying_users_dec25": 104599,
+      "total_revenue_dec25": 1089245.35441,
+      "active_rate": 2.39,
+      "payer_rate": 0.48,
+      "arppu": 10.41
+    },
+    {
+      "age_group": "36-45",
+      "total_users": 8055900,
+      "active_users_dec25": 273740,
+      "paying_users_dec25": 58866,
+      "total_revenue_dec25": 1316722.52407,
+      "active_rate": 3.4,
+      "payer_rate": 0.73,
+      "arppu": 22.37
+    },
+    {
+      "age_group": "46-55",
+      "total_users": 2873225,
+      "active_users_dec25": 123579,
+      "paying_users_dec25": 26070,
+      "total_revenue_dec25": 1084735.8087400002,
+      "active_rate": 4.3,
+      "payer_rate": 0.91,
+      "arppu": 41.61
+    },
+    {
+      "age_group": "56-65",
+      "total_users": 1382232,
+      "active_users_dec25": 62829,
+      "paying_users_dec25": 11846,
+      "total_revenue_dec25": 617362.6542199999,
+      "active_rate": 4.55,
+      "payer_rate": 0.86,
+      "arppu": 52.12
+    },
+    {
+      "age_group": "66-100",
+      "total_users": 3325020,
+      "active_users_dec25": 84965,
+      "paying_users_dec25": 14079,
+      "total_revenue_dec25": 259373.92566000004,
+      "active_rate": 2.56,
+      "payer_rate": 0.42,
+      "arppu": 18.42
+    },
+    {
+      "age_group": "Other",
+      "total_users": 15928382,
+      "active_users_dec25": 200955,
+      "paying_users_dec25": 30715,
+      "total_revenue_dec25": 451193.16643999994,
+      "active_rate": 1.26,
+      "payer_rate": 0.19,
+      "arppu": 14.69
+    }
+  ],
+  "completion_by_segment": [
+    {
+      "user_segment": "1. Past Whale+ / Current Payer",
+      "users": 122160.0,
+      "avg_shows_traversed": 70.59766781270464,
+      "avg_shows_50pct": 8.689394237066145,
+      "avg_shows_10hr": 17.316048624754423,
+      "pct_acq_show_10hr": 28.31875081859856,
+      "pct_acq_show_50pct": 7.252248690242305,
+      "pct_acq_show_90pct": 1.4221570072036671
+    },
+    {
+      "user_segment": "2. Past Whale+ / Current Non-Payer",
+      "users": 138637.0,
+      "avg_shows_traversed": 53.56801503206214,
+      "avg_shows_50pct": 4.677516824512937,
+      "avg_shows_10hr": 11.30004183587354,
+      "pct_acq_show_10hr": 25.79744584778955,
+      "pct_acq_show_50pct": 5.018950208097405,
+      "pct_acq_show_90pct": 0.681621789277033
+    },
+    {
+      "user_segment": "3. Past Non-Whale / Current Payer",
+      "users": 194425.0,
+      "avg_shows_traversed": 46.11832943294329,
+      "avg_shows_50pct": 4.108452616690241,
+      "avg_shows_10hr": 9.755122540825512,
+      "pct_acq_show_10hr": 15.810992413527071,
+      "pct_acq_show_50pct": 3.945035875016073,
+      "pct_acq_show_90pct": 0.7954121126398355
+    },
+    {
+      "user_segment": "4. Past Non-Whale / Current Non-Payer",
+      "users": 1379447.0,
+      "avg_shows_traversed": 37.526436535800215,
+      "avg_shows_50pct": 2.53721853757339,
+      "avg_shows_10hr": 6.410781494323451,
+      "pct_acq_show_10hr": 15.595440781704554,
+      "pct_acq_show_50pct": 3.203509449801261,
+      "pct_acq_show_90pct": 0.3287312959468541
+    }
+  ],
+  "top_shows_overall": [
+    {
+      "show": "The Alpha's Bride",
+      "genre": "Romantasy",
+      "users": 11581,
+      "revenue": 577439.88,
+      "user_pct": 3.68,
+      "revenue_pct": 10.6
+    },
+    {
+      "show": "My Vampire System",
+      "genre": "Fantasy",
+      "users": 5224,
+      "revenue": 333972.81,
+      "user_pct": 1.66,
+      "revenue_pct": 6.13
+    },
+    {
+      "show": "The Royal Accident",
+      "genre": "Romance",
+      "users": 4889,
+      "revenue": 279569.75,
+      "user_pct": 1.55,
+      "revenue_pct": 5.13
+    },
+    {
+      "show": "Super Yoddha | \u0938\u0941\u092a\u0930 \u092f\u094b\u0926\u094d\u0927\u093e",
+      "genre": "Fantasy",
+      "users": 51180,
+      "revenue": 258137.13,
+      "user_pct": 16.26,
+      "revenue_pct": 4.74
+    },
+    {
+      "show": "The Duke's Masked Bride",
+      "genre": "Romance",
+      "users": 4898,
+      "revenue": 233797.81,
+      "user_pct": 1.56,
+      "revenue_pct": 4.29
+    },
+    {
+      "show": "Shadow Slave",
+      "genre": "Fantasy",
+      "users": 1908,
+      "revenue": 228523.04,
+      "user_pct": 0.61,
+      "revenue_pct": 4.2
+    },
+    {
+      "show": "First Legendary Beast Master",
+      "genre": "Fantasy",
+      "users": 1854,
+      "revenue": 228214.54,
+      "user_pct": 0.59,
+      "revenue_pct": 4.19
+    },
+    {
+      "show": "Heir in Hiding",
+      "genre": "Drama",
+      "users": 1388,
+      "revenue": 130584.75,
+      "user_pct": 0.44,
+      "revenue_pct": 2.4
+    },
+    {
+      "show": "The Warrior | Author - Dayaram Prajapati",
+      "genre": "Fantasy",
+      "users": 5854,
+      "revenue": 94891.42,
+      "user_pct": 1.86,
+      "revenue_pct": 1.74
+    },
+    {
+      "show": "Super Gene",
+      "genre": "System and Superpower",
+      "users": 967,
+      "revenue": 82976.84,
+      "user_pct": 0.31,
+      "revenue_pct": 1.52
+    }
+  ],
+  "discovery_overall": [
+    {
+      "source": "auto play",
+      "users": 113257,
+      "revenue": 2024432.41,
+      "user_pct": 35.77,
+      "revenue_pct": 36.97,
+      "rev_per_user": 17.87
+    },
+    {
+      "source": "for you",
+      "users": 88070,
+      "revenue": 1518780.79,
+      "user_pct": 27.82,
+      "revenue_pct": 27.73,
+      "rev_per_user": 17.25
+    },
+    {
+      "source": "player",
+      "users": 25207,
+      "revenue": 484586.3,
+      "user_pct": 7.96,
+      "revenue_pct": 8.85,
+      "rev_per_user": 19.22
+    },
+    {
+      "source": "deeplink",
+      "users": 42867,
+      "revenue": 436290.32,
+      "user_pct": 13.54,
+      "revenue_pct": 7.97,
+      "rev_per_user": 10.18
+    },
+    {
+      "source": "search",
+      "users": 18771,
+      "revenue": 404827.29,
+      "user_pct": 5.93,
+      "revenue_pct": 7.39,
+      "rev_per_user": 21.57
+    },
+    {
+      "source": "my_library",
+      "users": 5554,
+      "revenue": 216509.95,
+      "user_pct": 1.75,
+      "revenue_pct": 3.95,
+      "rev_per_user": 38.98
+    },
+    {
+      "source": "schedule_onboarding",
+      "users": 12354,
+      "revenue": 201933.86,
+      "user_pct": 3.9,
+      "revenue_pct": 3.69,
+      "rev_per_user": 16.35
+    },
+    {
+      "source": "explore_tab",
+      "users": 1889,
+      "revenue": 42059.6,
+      "user_pct": 0.6,
+      "revenue_pct": 0.77,
+      "rev_per_user": 22.27
+    },
+    {
+      "source": "show_detail",
+      "users": 553,
+      "revenue": 34709.94,
+      "user_pct": 0.17,
+      "revenue_pct": 0.63,
+      "rev_per_user": 62.77
+    },
+    {
+      "source": "mini_player",
+      "users": 1418,
+      "revenue": 20945.33,
+      "user_pct": 0.45,
+      "revenue_pct": 0.38,
+      "rev_per_user": 14.77
+    }
+  ],
+  "top_shows_by_microsegment": {
+    "1. Past Whale+ / Current Payer": {
+      "USA": {
+        "Male": [
+          {
+            "show": "Shadow Slave",
+            "genre": "Fantasy",
+            "users": 893,
+            "revenue": 134368.25,
+            "user_pct": 8.1,
+            "revenue_pct": 10.41
+          },
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 1313,
+            "revenue": 114057.8,
+            "user_pct": 11.9,
+            "revenue_pct": 8.83
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 630,
+            "revenue": 92943.09,
+            "user_pct": 5.71,
+            "revenue_pct": 7.2
+          },
+          {
+            "show": "Heir in Hiding",
+            "genre": "Drama",
+            "users": 442,
+            "revenue": 77109.8,
+            "user_pct": 4.01,
+            "revenue_pct": 5.97
+          },
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 636,
+            "revenue": 53262.22,
+            "user_pct": 5.77,
+            "revenue_pct": 4.13
+          }
+        ],
+        "Female": [
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 3502,
+            "revenue": 243256.1,
+            "user_pct": 24.47,
+            "revenue_pct": 21.16
+          },
+          {
+            "show": "The Royal Accident",
+            "genre": "Romance",
+            "users": 1844,
+            "revenue": 133205.47,
+            "user_pct": 12.89,
+            "revenue_pct": 11.59
+          },
+          {
+            "show": "The Duke's Masked Bride",
+            "genre": "Romance",
+            "users": 1570,
+            "revenue": 102202.44,
+            "user_pct": 10.97,
+            "revenue_pct": 8.89
+          },
+          {
+            "show": "I'm Married to a Stranger",
+            "genre": "Drama",
+            "users": 242,
+            "revenue": 33294.84,
+            "user_pct": 1.69,
+            "revenue_pct": 2.9
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 194,
+            "revenue": 26336.06,
+            "user_pct": 1.36,
+            "revenue_pct": 2.29
+          }
+        ]
+      },
+      "India": {
+        "Male": [
+          {
+            "show": "Super Yoddha | \u0938\u0941\u092a\u0930 \u092f\u094b\u0926\u094d\u0927\u093e",
+            "genre": "Fantasy",
+            "users": 15249,
+            "revenue": 85937.88,
+            "user_pct": 20.83,
+            "revenue_pct": 17.35
+          },
+          {
+            "show": "The Warrior | Author - Dayaram Prajapati",
+            "genre": "Fantasy",
+            "users": 2494,
+            "revenue": 45865.25,
+            "user_pct": 3.41,
+            "revenue_pct": 9.26
+          },
+          {
+            "show": "Brahmyodha : The Destroyer | \u092c\u094d\u0930\u0939\u094d\u092e\u092f\u094b\u0926\u094d\u0927\u093e : \u0926 \u0921\u093f\u0938\u094d\u091f\u094d\u0930\u094b\u092f\u0930 | Author - Ajit Kumar",
+            "genre": "Fantasy",
+            "users": 3415,
+            "revenue": 36756.52,
+            "user_pct": 4.66,
+            "revenue_pct": 7.42
+          },
+          {
+            "show": "Mahagatha | \u092e\u0939\u093e\u0917\u093e\u0925\u093e | Author - S. Mauryavanshi",
+            "genre": "Fantasy",
+            "users": 3035,
+            "revenue": 30167.23,
+            "user_pct": 4.14,
+            "revenue_pct": 6.09
+          },
+          {
+            "show": "Brahmand Ka Rakshak | \u092c\u094d\u0930\u0939\u094d\u092e\u093e\u0902\u0921 \u0915\u093e \u0930\u0915\u094d\u0937\u0915  Author - Vaibhav Bachhav",
+            "genre": "Fantasy",
+            "users": 1995,
+            "revenue": 24656.45,
+            "user_pct": 2.72,
+            "revenue_pct": 4.98
+          }
+        ],
+        "Female": [
+          {
+            "show": "Super Yoddha | \u0938\u0941\u092a\u0930 \u092f\u094b\u0926\u094d\u0927\u093e",
+            "genre": "Fantasy",
+            "users": 2220,
+            "revenue": 11558.9,
+            "user_pct": 12.36,
+            "revenue_pct": 13.04
+          },
+          {
+            "show": "The Warrior | Author - Dayaram Prajapati",
+            "genre": "Fantasy",
+            "users": 354,
+            "revenue": 5917.35,
+            "user_pct": 1.97,
+            "revenue_pct": 6.67
+          },
+          {
+            "show": "Brahmyodha : The Destroyer | \u092c\u094d\u0930\u0939\u094d\u092e\u092f\u094b\u0926\u094d\u0927\u093e : \u0926 \u0921\u093f\u0938\u094d\u091f\u094d\u0930\u094b\u092f\u0930 | Author - Ajit Kumar",
+            "genre": "Fantasy",
+            "users": 380,
+            "revenue": 4159.28,
+            "user_pct": 2.12,
+            "revenue_pct": 4.69
+          },
+          {
+            "show": "My Mysterious Princess",
+            "genre": "Drama",
+            "users": 856,
+            "revenue": 3919.89,
+            "user_pct": 4.77,
+            "revenue_pct": 4.42
+          },
+          {
+            "show": "His Secret Fortune | \u0939\u093f\u091c \u0938\u0940\u0915\u094d\u0930\u0947\u091f \u092b\u0949\u0930\u094d\u091a\u094d\u092f\u0942\u0928 | Author- Abhimanyu Singh",
+            "genre": "Romance",
+            "users": 610,
+            "revenue": 3572.62,
+            "user_pct": 3.4,
+            "revenue_pct": 4.03
+          }
+        ]
+      },
+      "UK": {
+        "Male": [
+          {
+            "show": "Heir in Hiding",
+            "genre": "Drama",
+            "users": 35,
+            "revenue": 3597.33,
+            "user_pct": 7.11,
+            "revenue_pct": 7.96
+          },
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 22,
+            "revenue": 2976.56,
+            "user_pct": 4.47,
+            "revenue_pct": 6.59
+          },
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 46,
+            "revenue": 2628.43,
+            "user_pct": 9.35,
+            "revenue_pct": 5.82
+          },
+          {
+            "show": "Jack's Retribution",
+            "genre": "Fantasy",
+            "users": 12,
+            "revenue": 2227.3,
+            "user_pct": 2.44,
+            "revenue_pct": 4.93
+          },
+          {
+            "show": "The Dragon Inside Me",
+            "genre": "Fantasy",
+            "users": 5,
+            "revenue": 1756.61,
+            "user_pct": 1.02,
+            "revenue_pct": 3.89
+          }
+        ],
+        "Female": [
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 135,
+            "revenue": 9743.56,
+            "user_pct": 21.19,
+            "revenue_pct": 18.77
+          },
+          {
+            "show": "The Royal Accident",
+            "genre": "Romance",
+            "users": 90,
+            "revenue": 3956.19,
+            "user_pct": 14.13,
+            "revenue_pct": 7.62
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 8,
+            "revenue": 2344.97,
+            "user_pct": 1.26,
+            "revenue_pct": 4.52
+          },
+          {
+            "show": "The Duke's Masked Bride",
+            "genre": "Romance",
+            "users": 30,
+            "revenue": 1672.79,
+            "user_pct": 4.71,
+            "revenue_pct": 3.22
+          },
+          {
+            "show": "His Four Little Rascals",
+            "genre": "Romance",
+            "users": 6,
+            "revenue": 1373.57,
+            "user_pct": 0.94,
+            "revenue_pct": 2.65
+          }
+        ]
+      },
+      "DE": {
+        "Male": [
+          {
+            "show": "Das Vampirsystem",
+            "genre": "Fantasy",
+            "users": 3,
+            "revenue": 370.55,
+            "user_pct": 13.04,
+            "revenue_pct": 25.94
+          },
+          {
+            "show": "Shadow Slave",
+            "genre": "Fantasy",
+            "users": 2,
+            "revenue": 284.84,
+            "user_pct": 8.7,
+            "revenue_pct": 19.94
+          },
+          {
+            "show": "Flameborne",
+            "genre": "Fantasy",
+            "users": 1,
+            "revenue": 141.35,
+            "user_pct": 4.35,
+            "revenue_pct": 9.89
+          },
+          {
+            "show": "The Billionaire's Bodyguard",
+            "genre": "Fantasy",
+            "users": 1,
+            "revenue": 137.19,
+            "user_pct": 4.35,
+            "revenue_pct": 9.6
+          },
+          {
+            "show": "Dragon System Awakening",
+            "genre": "System and Superpower",
+            "users": 2,
+            "revenue": 136.22,
+            "user_pct": 8.7,
+            "revenue_pct": 9.53
+          }
+        ],
+        "Female": [
+          {
+            "show": "A Presidential Affair",
+            "genre": "Drama",
+            "users": 1,
+            "revenue": 920.53,
+            "user_pct": 3.12,
+            "revenue_pct": 20.51
+          },
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 6,
+            "revenue": 573.39,
+            "user_pct": 18.75,
+            "revenue_pct": 12.77
+          },
+          {
+            "show": "The Feisty Girl and the Tyrant",
+            "genre": "Romance",
+            "users": 1,
+            "revenue": 519.04,
+            "user_pct": 3.12,
+            "revenue_pct": 11.56
+          },
+          {
+            "show": "The Silver Reign",
+            "genre": "Fantasy",
+            "users": 1,
+            "revenue": 396.49,
+            "user_pct": 3.12,
+            "revenue_pct": 8.83
+          },
+          {
+            "show": "The Royal Accident",
+            "genre": "Romance",
+            "users": 2,
+            "revenue": 368.96,
+            "user_pct": 6.25,
+            "revenue_pct": 8.22
+          }
+        ]
+      },
+      "RoW": {
+        "Male": [
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 184,
+            "revenue": 11963.92,
+            "user_pct": 9.86,
+            "revenue_pct": 9.35
+          },
+          {
+            "show": "Shadow Slave",
+            "genre": "Fantasy",
+            "users": 64,
+            "revenue": 6791.46,
+            "user_pct": 3.43,
+            "revenue_pct": 5.31
+          },
+          {
+            "show": "Flameborne",
+            "genre": "Fantasy",
+            "users": 47,
+            "revenue": 6466.0,
+            "user_pct": 2.52,
+            "revenue_pct": 5.05
+          },
+          {
+            "show": "The Billionaire's Bodyguard",
+            "genre": "Fantasy",
+            "users": 47,
+            "revenue": 5608.01,
+            "user_pct": 2.52,
+            "revenue_pct": 4.38
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 51,
+            "revenue": 5582.37,
+            "user_pct": 2.73,
+            "revenue_pct": 4.36
+          }
+        ],
+        "Female": [
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 444,
+            "revenue": 21854.29,
+            "user_pct": 21.1,
+            "revenue_pct": 19.51
+          },
+          {
+            "show": "The Royal Accident",
+            "genre": "Romance",
+            "users": 231,
+            "revenue": 9820.1,
+            "user_pct": 10.98,
+            "revenue_pct": 8.76
+          },
+          {
+            "show": "The Duke's Masked Bride",
+            "genre": "Romance",
+            "users": 138,
+            "revenue": 5158.88,
+            "user_pct": 6.56,
+            "revenue_pct": 4.6
+          },
+          {
+            "show": "Twists of Love & Revenge",
+            "genre": "Drama",
+            "users": 66,
+            "revenue": 3293.61,
+            "user_pct": 3.14,
+            "revenue_pct": 2.94
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 21,
+            "revenue": 3075.6,
+            "user_pct": 1.0,
+            "revenue_pct": 2.75
+          }
+        ]
+      }
+    },
+    "3. Past Non-Whale / Current Payer": {
+      "USA": {
+        "Male": [
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 2186,
+            "revenue": 138613.23,
+            "user_pct": 24.36,
+            "revenue_pct": 22.03
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 559,
+            "revenue": 67081.39,
+            "user_pct": 6.23,
+            "revenue_pct": 10.66
+          },
+          {
+            "show": "Shadow Slave",
+            "genre": "Fantasy",
+            "users": 570,
+            "revenue": 56144.17,
+            "user_pct": 6.35,
+            "revenue_pct": 8.92
+          },
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 758,
+            "revenue": 37430.43,
+            "user_pct": 8.45,
+            "revenue_pct": 5.95
+          },
+          {
+            "show": "Heir in Hiding",
+            "genre": "Drama",
+            "users": 416,
+            "revenue": 25216.52,
+            "user_pct": 4.64,
+            "revenue_pct": 4.01
+          }
+        ],
+        "Female": [
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 4399,
+            "revenue": 160766.11,
+            "user_pct": 31.25,
+            "revenue_pct": 26.65
+          },
+          {
+            "show": "The Duke's Masked Bride",
+            "genre": "Romance",
+            "users": 2279,
+            "revenue": 95052.28,
+            "user_pct": 16.19,
+            "revenue_pct": 15.76
+          },
+          {
+            "show": "The Royal Accident",
+            "genre": "Romance",
+            "users": 1745,
+            "revenue": 81451.47,
+            "user_pct": 12.4,
+            "revenue_pct": 13.5
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 237,
+            "revenue": 22207.16,
+            "user_pct": 1.68,
+            "revenue_pct": 3.68
+          },
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 354,
+            "revenue": 21891.15,
+            "user_pct": 2.51,
+            "revenue_pct": 3.63
+          }
+        ]
+      },
+      "India": {
+        "Male": [
+          {
+            "show": "Super Yoddha | \u0938\u0941\u092a\u0930 \u092f\u094b\u0926\u094d\u0927\u093e",
+            "genre": "Fantasy",
+            "users": 27435,
+            "revenue": 129618.53,
+            "user_pct": 22.52,
+            "revenue_pct": 24.87
+          },
+          {
+            "show": "The Warrior | Author - Dayaram Prajapati",
+            "genre": "Fantasy",
+            "users": 2408,
+            "revenue": 34216.94,
+            "user_pct": 1.98,
+            "revenue_pct": 6.57
+          },
+          {
+            "show": "Brahmyodha : The Destroyer | \u092c\u094d\u0930\u0939\u094d\u092e\u092f\u094b\u0926\u094d\u0927\u093e : \u0926 \u0921\u093f\u0938\u094d\u091f\u094d\u0930\u094b\u092f\u0930 | Author - Ajit Kumar",
+            "genre": "Fantasy",
+            "users": 4629,
+            "revenue": 34109.54,
+            "user_pct": 3.8,
+            "revenue_pct": 6.55
+          },
+          {
+            "show": "Mahagatha | \u092e\u0939\u093e\u0917\u093e\u0925\u093e | Author - S. Mauryavanshi",
+            "genre": "Fantasy",
+            "users": 3868,
+            "revenue": 28172.63,
+            "user_pct": 3.18,
+            "revenue_pct": 5.41
+          },
+          {
+            "show": "Brahmand Ka Rakshak | \u092c\u094d\u0930\u0939\u094d\u092e\u093e\u0902\u0921 \u0915\u093e \u0930\u0915\u094d\u0937\u0915  Author - Vaibhav Bachhav",
+            "genre": "Fantasy",
+            "users": 3222,
+            "revenue": 26251.36,
+            "user_pct": 2.64,
+            "revenue_pct": 5.04
+          }
+        ],
+        "Female": [
+          {
+            "show": "Super Yoddha | \u0938\u0941\u092a\u0930 \u092f\u094b\u0926\u094d\u0927\u093e",
+            "genre": "Fantasy",
+            "users": 6050,
+            "revenue": 25739.63,
+            "user_pct": 14.88,
+            "revenue_pct": 20.61
+          },
+          {
+            "show": "The Warrior | Author - Dayaram Prajapati",
+            "genre": "Fantasy",
+            "users": 571,
+            "revenue": 8266.01,
+            "user_pct": 1.4,
+            "revenue_pct": 6.62
+          },
+          {
+            "show": "Brahmyodha : The Destroyer | \u092c\u094d\u0930\u0939\u094d\u092e\u092f\u094b\u0926\u094d\u0927\u093e : \u0926 \u0921\u093f\u0938\u094d\u091f\u094d\u0930\u094b\u092f\u0930 | Author - Ajit Kumar",
+            "genre": "Fantasy",
+            "users": 778,
+            "revenue": 5200.09,
+            "user_pct": 1.91,
+            "revenue_pct": 4.16
+          },
+          {
+            "show": "Mahagatha | \u092e\u0939\u093e\u0917\u093e\u0925\u093e | Author - S. Mauryavanshi",
+            "genre": "Fantasy",
+            "users": 690,
+            "revenue": 4300.05,
+            "user_pct": 1.7,
+            "revenue_pct": 3.44
+          },
+          {
+            "show": "Brahmand Ka Rakshak | \u092c\u094d\u0930\u0939\u094d\u092e\u093e\u0902\u0921 \u0915\u093e \u0930\u0915\u094d\u0937\u0915  Author - Vaibhav Bachhav",
+            "genre": "Fantasy",
+            "users": 637,
+            "revenue": 4221.91,
+            "user_pct": 1.57,
+            "revenue_pct": 3.38
+          }
+        ]
+      },
+      "UK": {
+        "Male": [
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 99,
+            "revenue": 4719.89,
+            "user_pct": 20.25,
+            "revenue_pct": 21.11
+          },
+          {
+            "show": "Heir in Hiding",
+            "genre": "Drama",
+            "users": 70,
+            "revenue": 2377.89,
+            "user_pct": 14.31,
+            "revenue_pct": 10.63
+          },
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 31,
+            "revenue": 1701.19,
+            "user_pct": 6.34,
+            "revenue_pct": 7.61
+          },
+          {
+            "show": "King of the Nine Flames",
+            "genre": "Fantasy",
+            "users": 2,
+            "revenue": 1668.47,
+            "user_pct": 0.41,
+            "revenue_pct": 7.46
+          },
+          {
+            "show": "Shadow Slave",
+            "genre": "Fantasy",
+            "users": 25,
+            "revenue": 1274.18,
+            "user_pct": 5.11,
+            "revenue_pct": 5.7
+          }
+        ],
+        "Female": [
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 220,
+            "revenue": 7528.41,
+            "user_pct": 31.98,
+            "revenue_pct": 30.56
+          },
+          {
+            "show": "The Royal Accident",
+            "genre": "Romance",
+            "users": 80,
+            "revenue": 3115.45,
+            "user_pct": 11.63,
+            "revenue_pct": 12.64
+          },
+          {
+            "show": "Twins, Love and Revenge",
+            "genre": "Romance",
+            "users": 2,
+            "revenue": 1146.79,
+            "user_pct": 0.29,
+            "revenue_pct": 4.65
+          },
+          {
+            "show": "Twists of Love & Revenge",
+            "genre": "Drama",
+            "users": 17,
+            "revenue": 1138.79,
+            "user_pct": 2.47,
+            "revenue_pct": 4.62
+          },
+          {
+            "show": "The Duke's Masked Bride",
+            "genre": "Romance",
+            "users": 27,
+            "revenue": 1112.11,
+            "user_pct": 3.92,
+            "revenue_pct": 4.51
+          }
+        ]
+      },
+      "DE": {
+        "Male": [
+          {
+            "show": "Das Vampirsystem",
+            "genre": "Fantasy",
+            "users": 9,
+            "revenue": 340.37,
+            "user_pct": 18.75,
+            "revenue_pct": 26.79
+          },
+          {
+            "show": "Death\u2019s Rebellion",
+            "genre": "Fantasy",
+            "users": 1,
+            "revenue": 284.48,
+            "user_pct": 2.08,
+            "revenue_pct": 22.39
+          },
+          {
+            "show": "Vom Alpha Begehrt",
+            "genre": "Romance",
+            "users": 2,
+            "revenue": 222.62,
+            "user_pct": 4.17,
+            "revenue_pct": 17.52
+          },
+          {
+            "show": "Die Bibliothek Des Himmelspfads ",
+            "genre": "Fantasy",
+            "users": 1,
+            "revenue": 71.54,
+            "user_pct": 2.08,
+            "revenue_pct": 5.63
+          },
+          {
+            "show": "The Silent Rebirth",
+            "genre": "Fantasy",
+            "users": 1,
+            "revenue": 54.71,
+            "user_pct": 2.08,
+            "revenue_pct": 4.31
+          }
+        ],
+        "Female": [
+          {
+            "show": "Das Vampirsystem",
+            "genre": "Fantasy",
+            "users": 3,
+            "revenue": 915.34,
+            "user_pct": 5.56,
+            "revenue_pct": 45.36
+          },
+          {
+            "show": "Vom Alpha Begehrt",
+            "genre": "Romance",
+            "users": 15,
+            "revenue": 425.68,
+            "user_pct": 27.78,
+            "revenue_pct": 21.09
+          },
+          {
+            "show": "Noras Geheimnis",
+            "genre": "Drama",
+            "users": 6,
+            "revenue": 179.91,
+            "user_pct": 11.11,
+            "revenue_pct": 8.91
+          },
+          {
+            "show": "Die Maskierte Sch\u00f6nheit",
+            "genre": "Romance",
+            "users": 3,
+            "revenue": 146.94,
+            "user_pct": 5.56,
+            "revenue_pct": 7.28
+          },
+          {
+            "show": "The Assassin\u2019s Code",
+            "genre": "Fantasy",
+            "users": 1,
+            "revenue": 101.83,
+            "user_pct": 1.85,
+            "revenue_pct": 5.05
+          }
+        ]
+      },
+      "RoW": {
+        "Male": [
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 513,
+            "revenue": 16474.06,
+            "user_pct": 17.68,
+            "revenue_pct": 21.4
+          },
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 184,
+            "revenue": 5491.13,
+            "user_pct": 6.34,
+            "revenue_pct": 7.13
+          },
+          {
+            "show": "First Legendary Beast Master",
+            "genre": "Fantasy",
+            "users": 69,
+            "revenue": 4406.09,
+            "user_pct": 2.38,
+            "revenue_pct": 5.72
+          },
+          {
+            "show": "Shadow Slave",
+            "genre": "Fantasy",
+            "users": 83,
+            "revenue": 4227.9,
+            "user_pct": 2.86,
+            "revenue_pct": 5.49
+          },
+          {
+            "show": "Flameborne",
+            "genre": "Fantasy",
+            "users": 57,
+            "revenue": 3610.49,
+            "user_pct": 1.96,
+            "revenue_pct": 4.69
+          }
+        ],
+        "Female": [
+          {
+            "show": "The Alpha's Bride",
+            "genre": "Romantasy",
+            "users": 1109,
+            "revenue": 28918.49,
+            "user_pct": 33.83,
+            "revenue_pct": 39.47
+          },
+          {
+            "show": "The Royal Accident",
+            "genre": "Romance",
+            "users": 282,
+            "revenue": 6447.67,
+            "user_pct": 8.6,
+            "revenue_pct": 8.8
+          },
+          {
+            "show": "The Duke's Masked Bride",
+            "genre": "Romance",
+            "users": 367,
+            "revenue": 5551.86,
+            "user_pct": 11.2,
+            "revenue_pct": 7.58
+          },
+          {
+            "show": "My Vampire System",
+            "genre": "Fantasy",
+            "users": 113,
+            "revenue": 2709.74,
+            "user_pct": 3.45,
+            "revenue_pct": 3.7
+          },
+          {
+            "show": "Una Luna Para Un Alfa",
+            "genre": "Romantasy",
+            "users": 73,
+            "revenue": 1553.62,
+            "user_pct": 2.23,
+            "revenue_pct": 2.12
+          }
+        ]
+      }
+    }
+  },
+  "top_shows_by_locale_gender": {
+    "USA": {
+      "Male": [
+        {
+          "show": "My Vampire System",
+          "genre": "Fantasy",
+          "users": 3499,
+          "revenue": 252671.03,
+          "user_pct": 17.49,
+          "revenue_pct": 13.16
+        },
+        {
+          "show": "Shadow Slave",
+          "genre": "Fantasy",
+          "users": 1463,
+          "revenue": 190512.42,
+          "user_pct": 7.31,
+          "revenue_pct": 9.92
+        },
+        {
+          "show": "First Legendary Beast Master",
+          "genre": "Fantasy",
+          "users": 1189,
+          "revenue": 160024.48,
+          "user_pct": 5.94,
+          "revenue_pct": 8.33
+        },
+        {
+          "show": "Heir in Hiding",
+          "genre": "Drama",
+          "users": 858,
+          "revenue": 102326.31,
+          "user_pct": 4.29,
+          "revenue_pct": 5.33
+        },
+        {
+          "show": "The Alpha's Bride",
+          "genre": "Romantasy",
+          "users": 1394,
+          "revenue": 90692.65,
+          "user_pct": 6.97,
+          "revenue_pct": 4.72
+        }
+      ],
+      "Female": [
+        {
+          "show": "The Alpha's Bride",
+          "genre": "Romantasy",
+          "users": 7901,
+          "revenue": 404022.21,
+          "user_pct": 27.83,
+          "revenue_pct": 23.05
+        },
+        {
+          "show": "The Royal Accident",
+          "genre": "Romance",
+          "users": 3589,
+          "revenue": 214656.94,
+          "user_pct": 12.64,
+          "revenue_pct": 12.25
+        },
+        {
+          "show": "The Duke's Masked Bride",
+          "genre": "Romance",
+          "users": 3849,
+          "revenue": 197254.72,
+          "user_pct": 13.56,
+          "revenue_pct": 11.25
+        },
+        {
+          "show": "First Legendary Beast Master",
+          "genre": "Fantasy",
+          "users": 431,
+          "revenue": 48543.22,
+          "user_pct": 1.52,
+          "revenue_pct": 2.77
+        },
+        {
+          "show": "I'm Married to a Stranger",
+          "genre": "Drama",
+          "users": 348,
+          "revenue": 39000.47,
+          "user_pct": 1.23,
+          "revenue_pct": 2.22
+        }
+      ]
+    },
+    "India": {
+      "Male": [
+        {
+          "show": "Super Yoddha | \u0938\u0941\u092a\u0930 \u092f\u094b\u0926\u094d\u0927\u093e",
+          "genre": "Fantasy",
+          "users": 42684,
+          "revenue": 215556.41,
+          "user_pct": 21.88,
+          "revenue_pct": 21.2
+        },
+        {
+          "show": "The Warrior | Author - Dayaram Prajapati",
+          "genre": "Fantasy",
+          "users": 4902,
+          "revenue": 80082.19,
+          "user_pct": 2.51,
+          "revenue_pct": 7.88
+        },
+        {
+          "show": "Brahmyodha : The Destroyer | \u092c\u094d\u0930\u0939\u094d\u092e\u092f\u094b\u0926\u094d\u0927\u093e : \u0926 \u0921\u093f\u0938\u094d\u091f\u094d\u0930\u094b\u092f\u0930 | Author - Ajit Kumar",
+          "genre": "Fantasy",
+          "users": 8044,
+          "revenue": 70866.06,
+          "user_pct": 4.12,
+          "revenue_pct": 6.97
+        },
+        {
+          "show": "Mahagatha | \u092e\u0939\u093e\u0917\u093e\u0925\u093e | Author - S. Mauryavanshi",
+          "genre": "Fantasy",
+          "users": 6903,
+          "revenue": 58339.86,
+          "user_pct": 3.54,
+          "revenue_pct": 5.74
+        },
+        {
+          "show": "Brahmand Ka Rakshak | \u092c\u094d\u0930\u0939\u094d\u092e\u093e\u0902\u0921 \u0915\u093e \u0930\u0915\u094d\u0937\u0915  Author - Vaibhav Bachhav",
+          "genre": "Fantasy",
+          "users": 5217,
+          "revenue": 50907.81,
+          "user_pct": 2.67,
+          "revenue_pct": 5.01
+        }
+      ],
+      "Female": [
+        {
+          "show": "Super Yoddha | \u0938\u0941\u092a\u0930 \u092f\u094b\u0926\u094d\u0927\u093e",
+          "genre": "Fantasy",
+          "users": 8270,
+          "revenue": 37298.53,
+          "user_pct": 14.11,
+          "revenue_pct": 17.47
+        },
+        {
+          "show": "The Warrior | Author - Dayaram Prajapati",
+          "genre": "Fantasy",
+          "users": 925,
+          "revenue": 14183.35,
+          "user_pct": 1.58,
+          "revenue_pct": 6.64
+        },
+        {
+          "show": "Brahmyodha : The Destroyer | \u092c\u094d\u0930\u0939\u094d\u092e\u092f\u094b\u0926\u094d\u0927\u093e : \u0926 \u0921\u093f\u0938\u094d\u091f\u094d\u0930\u094b\u092f\u0930 | Author - Ajit Kumar",
+          "genre": "Fantasy",
+          "users": 1158,
+          "revenue": 9359.37,
+          "user_pct": 1.98,
+          "revenue_pct": 4.38
+        },
+        {
+          "show": "Mahagatha | \u092e\u0939\u093e\u0917\u093e\u0925\u093e | Author - S. Mauryavanshi",
+          "genre": "Fantasy",
+          "users": 1065,
+          "revenue": 7572.74,
+          "user_pct": 1.82,
+          "revenue_pct": 3.55
+        },
+        {
+          "show": "Brahmand Ka Rakshak | \u092c\u094d\u0930\u0939\u094d\u092e\u093e\u0902\u0921 \u0915\u093e \u0930\u0915\u094d\u0937\u0915  Author - Vaibhav Bachhav",
+          "genre": "Fantasy",
+          "users": 932,
+          "revenue": 7338.15,
+          "user_pct": 1.59,
+          "revenue_pct": 3.44
+        }
+      ]
+    },
+    "UK": {
+      "Male": [
+        {
+          "show": "My Vampire System",
+          "genre": "Fantasy",
+          "users": 145,
+          "revenue": 7348.32,
+          "user_pct": 14.78,
+          "revenue_pct": 10.88
+        },
+        {
+          "show": "Heir in Hiding",
+          "genre": "Drama",
+          "users": 105,
+          "revenue": 5975.22,
+          "user_pct": 10.7,
+          "revenue_pct": 8.85
+        },
+        {
+          "show": "The Alpha's Bride",
+          "genre": "Romantasy",
+          "users": 53,
+          "revenue": 4677.76,
+          "user_pct": 5.4,
+          "revenue_pct": 6.93
+        },
+        {
+          "show": "Shadow Slave",
+          "genre": "Fantasy",
+          "users": 46,
+          "revenue": 2912.3,
+          "user_pct": 4.69,
+          "revenue_pct": 4.31
+        },
+        {
+          "show": "First Legendary Beast Master",
+          "genre": "Fantasy",
+          "users": 39,
+          "revenue": 2609.83,
+          "user_pct": 3.98,
+          "revenue_pct": 3.86
+        }
+      ],
+      "Female": [
+        {
+          "show": "The Alpha's Bride",
+          "genre": "Romantasy",
+          "users": 355,
+          "revenue": 17271.97,
+          "user_pct": 26.79,
+          "revenue_pct": 22.57
+        },
+        {
+          "show": "The Royal Accident",
+          "genre": "Romance",
+          "users": 170,
+          "revenue": 7071.65,
+          "user_pct": 12.83,
+          "revenue_pct": 9.24
+        },
+        {
+          "show": "The Duke's Masked Bride",
+          "genre": "Romance",
+          "users": 57,
+          "revenue": 2784.91,
+          "user_pct": 4.3,
+          "revenue_pct": 3.64
+        },
+        {
+          "show": "First Legendary Beast Master",
+          "genre": "Fantasy",
+          "users": 12,
+          "revenue": 2693.53,
+          "user_pct": 0.91,
+          "revenue_pct": 3.52
+        },
+        {
+          "show": "Twists of Love & Revenge",
+          "genre": "Drama",
+          "users": 32,
+          "revenue": 2344.51,
+          "user_pct": 2.42,
+          "revenue_pct": 3.06
+        }
+      ]
+    },
+    "DE": {
+      "Male": [
+        {
+          "show": "Das Vampirsystem",
+          "genre": "Fantasy",
+          "users": 12,
+          "revenue": 710.91,
+          "user_pct": 16.9,
+          "revenue_pct": 26.34
+        },
+        {
+          "show": "Shadow Slave",
+          "genre": "Fantasy",
+          "users": 2,
+          "revenue": 284.84,
+          "user_pct": 2.82,
+          "revenue_pct": 10.55
+        },
+        {
+          "show": "Death\u2019s Rebellion",
+          "genre": "Fantasy",
+          "users": 1,
+          "revenue": 284.48,
+          "user_pct": 1.41,
+          "revenue_pct": 10.54
+        },
+        {
+          "show": "Vom Alpha Begehrt",
+          "genre": "Romance",
+          "users": 2,
+          "revenue": 222.62,
+          "user_pct": 2.82,
+          "revenue_pct": 8.25
+        },
+        {
+          "show": "Flameborne",
+          "genre": "Fantasy",
+          "users": 2,
+          "revenue": 158.98,
+          "user_pct": 2.82,
+          "revenue_pct": 5.89
+        }
+      ],
+      "Female": [
+        {
+          "show": "A Presidential Affair",
+          "genre": "Drama",
+          "users": 1,
+          "revenue": 920.53,
+          "user_pct": 1.16,
+          "revenue_pct": 14.15
+        },
+        {
+          "show": "Das Vampirsystem",
+          "genre": "Fantasy",
+          "users": 3,
+          "revenue": 915.34,
+          "user_pct": 3.49,
+          "revenue_pct": 14.07
+        },
+        {
+          "show": "The Alpha's Bride",
+          "genre": "Romantasy",
+          "users": 9,
+          "revenue": 585.99,
+          "user_pct": 10.47,
+          "revenue_pct": 9.01
+        },
+        {
+          "show": "The Feisty Girl and the Tyrant",
+          "genre": "Romance",
+          "users": 1,
+          "revenue": 519.04,
+          "user_pct": 1.16,
+          "revenue_pct": 7.98
+        },
+        {
+          "show": "Noras Geheimnis",
+          "genre": "Drama",
+          "users": 7,
+          "revenue": 482.91,
+          "user_pct": 8.14,
+          "revenue_pct": 7.42
+        }
+      ]
+    },
+    "RoW": {
+      "Male": [
+        {
+          "show": "My Vampire System",
+          "genre": "Fantasy",
+          "users": 697,
+          "revenue": 28437.97,
+          "user_pct": 14.62,
+          "revenue_pct": 13.87
+        },
+        {
+          "show": "Shadow Slave",
+          "genre": "Fantasy",
+          "users": 147,
+          "revenue": 11019.36,
+          "user_pct": 3.08,
+          "revenue_pct": 5.38
+        },
+        {
+          "show": "Flameborne",
+          "genre": "Fantasy",
+          "users": 104,
+          "revenue": 10076.49,
+          "user_pct": 2.18,
+          "revenue_pct": 4.92
+        },
+        {
+          "show": "First Legendary Beast Master",
+          "genre": "Fantasy",
+          "users": 120,
+          "revenue": 9988.46,
+          "user_pct": 2.52,
+          "revenue_pct": 4.87
+        },
+        {
+          "show": "The Alpha's Bride",
+          "genre": "Romantasy",
+          "users": 242,
+          "revenue": 8846.46,
+          "user_pct": 5.08,
+          "revenue_pct": 4.32
+        }
+      ],
+      "Female": [
+        {
+          "show": "The Alpha's Bride",
+          "genre": "Romantasy",
+          "users": 1553,
+          "revenue": 50772.78,
+          "user_pct": 28.86,
+          "revenue_pct": 27.4
+        },
+        {
+          "show": "The Royal Accident",
+          "genre": "Romance",
+          "users": 513,
+          "revenue": 16267.78,
+          "user_pct": 9.53,
+          "revenue_pct": 8.78
+        },
+        {
+          "show": "The Duke's Masked Bride",
+          "genre": "Romance",
+          "users": 505,
+          "revenue": 10710.74,
+          "user_pct": 9.38,
+          "revenue_pct": 5.78
+        },
+        {
+          "show": "My Vampire System",
+          "genre": "Fantasy",
+          "users": 168,
+          "revenue": 4873.83,
+          "user_pct": 3.12,
+          "revenue_pct": 2.63
+        },
+        {
+          "show": "Twists of Love & Revenge",
+          "genre": "Drama",
+          "users": 123,
+          "revenue": 4626.84,
+          "user_pct": 2.29,
+          "revenue_pct": 2.5
+        }
+      ]
+    }
+  },
+  "discovery_by_segment_locale": {
+    "1. Past Whale+ / Current Payer": {
+      "USA": [
+        {
+          "source": "auto play",
+          "users": 10060,
+          "revenue": 943083.88,
+          "user_pct": 39.58,
+          "revenue_pct": 38.5
+        },
+        {
+          "source": "for you",
+          "users": 6341,
+          "revenue": 686194.42,
+          "user_pct": 24.95,
+          "revenue_pct": 28.02
+        },
+        {
+          "source": "player",
+          "users": 2271,
+          "revenue": 225480.07,
+          "user_pct": 8.94,
+          "revenue_pct": 9.21
+        },
+        {
+          "source": "search",
+          "users": 2547,
+          "revenue": 220819.64,
+          "user_pct": 10.02,
+          "revenue_pct": 9.02
+        },
+        {
+          "source": "my_library",
+          "users": 1067,
+          "revenue": 136830.51,
+          "user_pct": 4.2,
+          "revenue_pct": 5.59
+        }
+      ],
+      "India": [
+        {
+          "source": "auto play",
+          "users": 35329,
+          "revenue": 235368.39,
+          "user_pct": 38.74,
+          "revenue_pct": 40.27
+        },
+        {
+          "source": "for you",
+          "users": 30231,
+          "revenue": 206738.9,
+          "user_pct": 33.15,
+          "revenue_pct": 35.37
+        },
+        {
+          "source": "player",
+          "users": 6978,
+          "revenue": 46323.56,
+          "user_pct": 7.65,
+          "revenue_pct": 7.93
+        },
+        {
+          "source": "deeplink",
+          "users": 7677,
+          "revenue": 31273.35,
+          "user_pct": 8.42,
+          "revenue_pct": 5.35
+        },
+        {
+          "source": "search",
+          "users": 4796,
+          "revenue": 24694.3,
+          "user_pct": 5.26,
+          "revenue_pct": 4.22
+        }
+      ],
+      "UK": [
+        {
+          "source": "for you",
+          "users": 328,
+          "revenue": 34220.51,
+          "user_pct": 29.08,
+          "revenue_pct": 35.45
+        },
+        {
+          "source": "auto play",
+          "users": 405,
+          "revenue": 34028.72,
+          "user_pct": 35.9,
+          "revenue_pct": 35.25
+        },
+        {
+          "source": "player",
+          "users": 95,
+          "revenue": 8079.1,
+          "user_pct": 8.42,
+          "revenue_pct": 8.37
+        },
+        {
+          "source": "my_library",
+          "users": 56,
+          "revenue": 7210.96,
+          "user_pct": 4.96,
+          "revenue_pct": 7.47
+        },
+        {
+          "source": "search",
+          "users": 101,
+          "revenue": 6686.36,
+          "user_pct": 8.95,
+          "revenue_pct": 6.93
+        }
+      ],
+      "DE": [
+        {
+          "source": "for you",
+          "users": 20,
+          "revenue": 3052.68,
+          "user_pct": 36.36,
+          "revenue_pct": 51.59
+        },
+        {
+          "source": "auto play",
+          "users": 18,
+          "revenue": 1108.77,
+          "user_pct": 32.73,
+          "revenue_pct": 18.74
+        },
+        {
+          "source": "my_library",
+          "users": 4,
+          "revenue": 736.19,
+          "user_pct": 7.27,
+          "revenue_pct": 12.44
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 3,
+          "revenue": 545.77,
+          "user_pct": 5.45,
+          "revenue_pct": 9.22
+        },
+        {
+          "source": "search",
+          "users": 3,
+          "revenue": 257.84,
+          "user_pct": 5.45,
+          "revenue_pct": 4.36
+        }
+      ],
+      "RoW": [
+        {
+          "source": "auto play",
+          "users": 1579,
+          "revenue": 87558.53,
+          "user_pct": 39.65,
+          "revenue_pct": 36.47
+        },
+        {
+          "source": "for you",
+          "users": 1209,
+          "revenue": 84155.88,
+          "user_pct": 30.36,
+          "revenue_pct": 35.05
+        },
+        {
+          "source": "player",
+          "users": 332,
+          "revenue": 19803.19,
+          "user_pct": 8.34,
+          "revenue_pct": 8.25
+        },
+        {
+          "source": "my_library",
+          "users": 187,
+          "revenue": 14749.4,
+          "user_pct": 4.7,
+          "revenue_pct": 6.14
+        },
+        {
+          "source": "search",
+          "users": 252,
+          "revenue": 13734.58,
+          "user_pct": 6.33,
+          "revenue_pct": 5.72
+        }
+      ]
+    },
+    "2. Past Whale+ / Current Non-Payer": {
+      "USA": [],
+      "India": [],
+      "UK": [],
+      "DE": [],
+      "RoW": []
+    },
+    "3. Past Non-Whale / Current Payer": {
+      "USA": [
+        {
+          "source": "auto play",
+          "users": 6641,
+          "revenue": 388925.93,
+          "user_pct": 28.66,
+          "revenue_pct": 31.41
+        },
+        {
+          "source": "for you",
+          "users": 4469,
+          "revenue": 272445.85,
+          "user_pct": 19.28,
+          "revenue_pct": 22.0
+        },
+        {
+          "source": "deeplink",
+          "users": 4364,
+          "revenue": 183529.68,
+          "user_pct": 18.83,
+          "revenue_pct": 14.82
+        },
+        {
+          "source": "player",
+          "users": 1892,
+          "revenue": 112481.89,
+          "user_pct": 8.16,
+          "revenue_pct": 9.08
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 2503,
+          "revenue": 105305.25,
+          "user_pct": 10.8,
+          "revenue_pct": 8.5
+        }
+      ],
+      "India": [
+        {
+          "source": "auto play",
+          "users": 56876,
+          "revenue": 267269.32,
+          "user_pct": 34.85,
+          "revenue_pct": 41.13
+        },
+        {
+          "source": "for you",
+          "users": 43810,
+          "revenue": 183330.91,
+          "user_pct": 26.84,
+          "revenue_pct": 28.21
+        },
+        {
+          "source": "deeplink",
+          "users": 27666,
+          "revenue": 74856.8,
+          "user_pct": 16.95,
+          "revenue_pct": 11.52
+        },
+        {
+          "source": "player",
+          "users": 13053,
+          "revenue": 55064.96,
+          "user_pct": 8.0,
+          "revenue_pct": 8.47
+        },
+        {
+          "source": "search",
+          "users": 8411,
+          "revenue": 24670.37,
+          "user_pct": 5.15,
+          "revenue_pct": 3.8
+        }
+      ],
+      "UK": [
+        {
+          "source": "auto play",
+          "users": 332,
+          "revenue": 15956.92,
+          "user_pct": 28.02,
+          "revenue_pct": 33.78
+        },
+        {
+          "source": "for you",
+          "users": 239,
+          "revenue": 13175.68,
+          "user_pct": 20.17,
+          "revenue_pct": 27.89
+        },
+        {
+          "source": "deeplink",
+          "users": 282,
+          "revenue": 6870.55,
+          "user_pct": 23.8,
+          "revenue_pct": 14.54
+        },
+        {
+          "source": "player",
+          "users": 75,
+          "revenue": 3396.55,
+          "user_pct": 6.33,
+          "revenue_pct": 7.19
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 102,
+          "revenue": 2826.71,
+          "user_pct": 8.61,
+          "revenue_pct": 5.98
+        }
+      ],
+      "DE": [
+        {
+          "source": "for you",
+          "users": 25,
+          "revenue": 1650.35,
+          "user_pct": 24.04,
+          "revenue_pct": 50.1
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 13,
+          "revenue": 530.35,
+          "user_pct": 12.5,
+          "revenue_pct": 16.1
+        },
+        {
+          "source": "auto play",
+          "users": 26,
+          "revenue": 308.38,
+          "user_pct": 25.0,
+          "revenue_pct": 9.36
+        },
+        {
+          "source": "deeplink",
+          "users": 24,
+          "revenue": 274.06,
+          "user_pct": 23.08,
+          "revenue_pct": 8.32
+        },
+        {
+          "source": "player",
+          "users": 6,
+          "revenue": 265.26,
+          "user_pct": 5.77,
+          "revenue_pct": 8.05
+        }
+      ],
+      "RoW": [
+        {
+          "source": "auto play",
+          "users": 1991,
+          "revenue": 50823.55,
+          "user_pct": 31.99,
+          "revenue_pct": 33.48
+        },
+        {
+          "source": "for you",
+          "users": 1398,
+          "revenue": 33815.61,
+          "user_pct": 22.46,
+          "revenue_pct": 22.28
+        },
+        {
+          "source": "deeplink",
+          "users": 1027,
+          "revenue": 19970.67,
+          "user_pct": 16.5,
+          "revenue_pct": 13.16
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 535,
+          "revenue": 16157.99,
+          "user_pct": 8.6,
+          "revenue_pct": 10.64
+        },
+        {
+          "source": "player",
+          "users": 503,
+          "revenue": 13619.18,
+          "user_pct": 8.08,
+          "revenue_pct": 8.97
+        }
+      ]
+    },
+    "4. Past Non-Whale / Current Non-Payer": {
+      "USA": [],
+      "India": [],
+      "UK": [],
+      "DE": [],
+      "RoW": []
+    }
+  },
+  "discovery_by_microsegment": {
+    "1. Past Whale+ / Current Payer": {
+      "USA": {
+        "Male": [
+          {
+            "source": "auto play",
+            "users": 4313,
+            "revenue": 472840.1,
+            "user_pct": 39.15,
+            "revenue_pct": 36.66
+          },
+          {
+            "source": "for you",
+            "users": 3082,
+            "revenue": 389167.96,
+            "user_pct": 27.97,
+            "revenue_pct": 30.17
+          },
+          {
+            "source": "player",
+            "users": 966,
+            "revenue": 120832.17,
+            "user_pct": 8.77,
+            "revenue_pct": 9.37
+          },
+          {
+            "source": "search",
+            "users": 897,
+            "revenue": 104888.93,
+            "user_pct": 8.14,
+            "revenue_pct": 8.13
+          },
+          {
+            "source": "my_library",
+            "users": 628,
+            "revenue": 93467.21,
+            "user_pct": 5.7,
+            "revenue_pct": 7.25
+          }
+        ],
+        "Female": [
+          {
+            "source": "auto play",
+            "users": 5713,
+            "revenue": 467113.11,
+            "user_pct": 39.96,
+            "revenue_pct": 40.7
+          },
+          {
+            "source": "for you",
+            "users": 3217,
+            "revenue": 292910.59,
+            "user_pct": 22.5,
+            "revenue_pct": 25.52
+          },
+          {
+            "source": "search",
+            "users": 1641,
+            "revenue": 114813.38,
+            "user_pct": 11.48,
+            "revenue_pct": 10.0
+          },
+          {
+            "source": "player",
+            "users": 1298,
+            "revenue": 102811.52,
+            "user_pct": 9.08,
+            "revenue_pct": 8.96
+          },
+          {
+            "source": "deeplink",
+            "users": 999,
+            "revenue": 59078.48,
+            "user_pct": 6.99,
+            "revenue_pct": 5.15
+          }
+        ]
+      },
+      "India": {
+        "Male": [
+          {
+            "source": "auto play",
+            "users": 29200,
+            "revenue": 203158.95,
+            "user_pct": 40.01,
+            "revenue_pct": 41.15
+          },
+          {
+            "source": "for you",
+            "users": 23134,
+            "revenue": 170459.41,
+            "user_pct": 31.7,
+            "revenue_pct": 34.53
+          },
+          {
+            "source": "player",
+            "users": 5525,
+            "revenue": 38975.38,
+            "user_pct": 7.57,
+            "revenue_pct": 7.89
+          },
+          {
+            "source": "deeplink",
+            "users": 6419,
+            "revenue": 26719.81,
+            "user_pct": 8.8,
+            "revenue_pct": 5.41
+          },
+          {
+            "source": "search",
+            "users": 3926,
+            "revenue": 21106.4,
+            "user_pct": 5.38,
+            "revenue_pct": 4.28
+          }
+        ],
+        "Female": [
+          {
+            "source": "for you",
+            "users": 6983,
+            "revenue": 35287.34,
+            "user_pct": 39.09,
+            "revenue_pct": 39.96
+          },
+          {
+            "source": "auto play",
+            "users": 5991,
+            "revenue": 31203.3,
+            "user_pct": 33.53,
+            "revenue_pct": 35.33
+          },
+          {
+            "source": "player",
+            "users": 1424,
+            "revenue": 7264.47,
+            "user_pct": 7.97,
+            "revenue_pct": 8.23
+          },
+          {
+            "source": "deeplink",
+            "users": 1227,
+            "revenue": 4450.49,
+            "user_pct": 6.87,
+            "revenue_pct": 5.04
+          },
+          {
+            "source": "search",
+            "users": 843,
+            "revenue": 3503.43,
+            "user_pct": 4.72,
+            "revenue_pct": 3.97
+          }
+        ]
+      },
+      "UK": {
+        "Male": [
+          {
+            "source": "for you",
+            "users": 153,
+            "revenue": 17495.49,
+            "user_pct": 31.29,
+            "revenue_pct": 39.11
+          },
+          {
+            "source": "auto play",
+            "users": 161,
+            "revenue": 14428.98,
+            "user_pct": 32.92,
+            "revenue_pct": 32.26
+          },
+          {
+            "source": "player",
+            "users": 39,
+            "revenue": 3536.76,
+            "user_pct": 7.98,
+            "revenue_pct": 7.91
+          },
+          {
+            "source": "my_library",
+            "users": 31,
+            "revenue": 3388.22,
+            "user_pct": 6.34,
+            "revenue_pct": 7.57
+          },
+          {
+            "source": "search",
+            "users": 40,
+            "revenue": 2830.87,
+            "user_pct": 8.18,
+            "revenue_pct": 6.33
+          }
+        ],
+        "Female": [
+          {
+            "source": "auto play",
+            "users": 242,
+            "revenue": 19582.4,
+            "user_pct": 38.11,
+            "revenue_pct": 37.87
+          },
+          {
+            "source": "for you",
+            "users": 174,
+            "revenue": 16671.96,
+            "user_pct": 27.4,
+            "revenue_pct": 32.24
+          },
+          {
+            "source": "player",
+            "users": 56,
+            "revenue": 4542.34,
+            "user_pct": 8.82,
+            "revenue_pct": 8.78
+          },
+          {
+            "source": "search",
+            "users": 61,
+            "revenue": 3855.5,
+            "user_pct": 9.61,
+            "revenue_pct": 7.46
+          },
+          {
+            "source": "my_library",
+            "users": 25,
+            "revenue": 3822.74,
+            "user_pct": 3.94,
+            "revenue_pct": 7.39
+          }
+        ]
+      },
+      "DE": {
+        "Male": [
+          {
+            "source": "for you",
+            "users": 7,
+            "revenue": 491.23,
+            "user_pct": 30.43,
+            "revenue_pct": 34.38
+          },
+          {
+            "source": "auto play",
+            "users": 8,
+            "revenue": 487.81,
+            "user_pct": 34.78,
+            "revenue_pct": 34.14
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 2,
+            "revenue": 242.77,
+            "user_pct": 8.7,
+            "revenue_pct": 16.99
+          },
+          {
+            "source": "deeplink",
+            "users": 2,
+            "revenue": 136.58,
+            "user_pct": 8.7,
+            "revenue_pct": 9.56
+          },
+          {
+            "source": "player",
+            "users": 1,
+            "revenue": 44.35,
+            "user_pct": 4.35,
+            "revenue_pct": 3.1
+          }
+        ],
+        "Female": [
+          {
+            "source": "for you",
+            "users": 13,
+            "revenue": 2561.45,
+            "user_pct": 40.62,
+            "revenue_pct": 57.06
+          },
+          {
+            "source": "my_library",
+            "users": 3,
+            "revenue": 716.25,
+            "user_pct": 9.38,
+            "revenue_pct": 15.96
+          },
+          {
+            "source": "auto play",
+            "users": 10,
+            "revenue": 620.96,
+            "user_pct": 31.25,
+            "revenue_pct": 13.83
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 1,
+            "revenue": 303.0,
+            "user_pct": 3.12,
+            "revenue_pct": 6.75
+          },
+          {
+            "source": "search",
+            "users": 3,
+            "revenue": 257.84,
+            "user_pct": 9.38,
+            "revenue_pct": 5.74
+          }
+        ]
+      },
+      "RoW": {
+        "Male": [
+          {
+            "source": "for you",
+            "users": 619,
+            "revenue": 47881.43,
+            "user_pct": 33.24,
+            "revenue_pct": 37.43
+          },
+          {
+            "source": "auto play",
+            "users": 699,
+            "revenue": 44942.2,
+            "user_pct": 37.54,
+            "revenue_pct": 35.13
+          },
+          {
+            "source": "player",
+            "users": 157,
+            "revenue": 11591.56,
+            "user_pct": 8.43,
+            "revenue_pct": 9.06
+          },
+          {
+            "source": "my_library",
+            "users": 108,
+            "revenue": 8886.17,
+            "user_pct": 5.8,
+            "revenue_pct": 6.95
+          },
+          {
+            "source": "search",
+            "users": 99,
+            "revenue": 5160.28,
+            "user_pct": 5.32,
+            "revenue_pct": 4.03
+          }
+        ],
+        "Female": [
+          {
+            "source": "auto play",
+            "users": 873,
+            "revenue": 42470.85,
+            "user_pct": 41.55,
+            "revenue_pct": 38.0
+          },
+          {
+            "source": "for you",
+            "users": 583,
+            "revenue": 36220.44,
+            "user_pct": 27.75,
+            "revenue_pct": 32.41
+          },
+          {
+            "source": "search",
+            "users": 152,
+            "revenue": 8546.09,
+            "user_pct": 7.23,
+            "revenue_pct": 7.65
+          },
+          {
+            "source": "player",
+            "users": 174,
+            "revenue": 8205.86,
+            "user_pct": 8.28,
+            "revenue_pct": 7.34
+          },
+          {
+            "source": "my_library",
+            "users": 77,
+            "revenue": 5733.23,
+            "user_pct": 3.66,
+            "revenue_pct": 5.13
+          }
+        ]
+      }
+    },
+    "3. Past Non-Whale / Current Payer": {
+      "USA": {
+        "Male": [
+          {
+            "source": "auto play",
+            "users": 2617,
+            "revenue": 194644.81,
+            "user_pct": 29.19,
+            "revenue_pct": 30.98
+          },
+          {
+            "source": "for you",
+            "users": 2041,
+            "revenue": 157706.23,
+            "user_pct": 22.77,
+            "revenue_pct": 25.1
+          },
+          {
+            "source": "deeplink",
+            "users": 1494,
+            "revenue": 87153.6,
+            "user_pct": 16.67,
+            "revenue_pct": 13.87
+          },
+          {
+            "source": "player",
+            "users": 710,
+            "revenue": 57032.5,
+            "user_pct": 7.92,
+            "revenue_pct": 9.08
+          },
+          {
+            "source": "search",
+            "users": 748,
+            "revenue": 45590.01,
+            "user_pct": 8.34,
+            "revenue_pct": 7.26
+          }
+        ],
+        "Female": [
+          {
+            "source": "auto play",
+            "users": 3975,
+            "revenue": 191184.32,
+            "user_pct": 28.26,
+            "revenue_pct": 31.7
+          },
+          {
+            "source": "for you",
+            "users": 2400,
+            "revenue": 112509.04,
+            "user_pct": 17.06,
+            "revenue_pct": 18.65
+          },
+          {
+            "source": "deeplink",
+            "users": 2841,
+            "revenue": 95480.08,
+            "user_pct": 20.2,
+            "revenue_pct": 15.83
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 1683,
+            "revenue": 60150.7,
+            "user_pct": 11.97,
+            "revenue_pct": 9.97
+          },
+          {
+            "source": "search",
+            "users": 1416,
+            "revenue": 56791.2,
+            "user_pct": 10.07,
+            "revenue_pct": 9.42
+          }
+        ]
+      },
+      "India": {
+        "Male": [
+          {
+            "source": "auto play",
+            "users": 42597,
+            "revenue": 216419.31,
+            "user_pct": 35.06,
+            "revenue_pct": 41.62
+          },
+          {
+            "source": "for you",
+            "users": 31592,
+            "revenue": 144408.6,
+            "user_pct": 26.0,
+            "revenue_pct": 27.77
+          },
+          {
+            "source": "deeplink",
+            "users": 21451,
+            "revenue": 61178.46,
+            "user_pct": 17.65,
+            "revenue_pct": 11.76
+          },
+          {
+            "source": "player",
+            "users": 9534,
+            "revenue": 43262.96,
+            "user_pct": 7.85,
+            "revenue_pct": 8.32
+          },
+          {
+            "source": "search",
+            "users": 6391,
+            "revenue": 20128.97,
+            "user_pct": 5.26,
+            "revenue_pct": 3.87
+          }
+        ],
+        "Female": [
+          {
+            "source": "auto play",
+            "users": 13854,
+            "revenue": 48501.22,
+            "user_pct": 34.2,
+            "revenue_pct": 39.01
+          },
+          {
+            "source": "for you",
+            "users": 11907,
+            "revenue": 37713.49,
+            "user_pct": 29.4,
+            "revenue_pct": 30.34
+          },
+          {
+            "source": "deeplink",
+            "users": 6032,
+            "revenue": 13037.35,
+            "user_pct": 14.89,
+            "revenue_pct": 10.49
+          },
+          {
+            "source": "player",
+            "users": 3385,
+            "revenue": 11005.27,
+            "user_pct": 8.36,
+            "revenue_pct": 8.85
+          },
+          {
+            "source": "search",
+            "users": 1963,
+            "revenue": 4326.78,
+            "user_pct": 4.85,
+            "revenue_pct": 3.48
+          }
+        ]
+      },
+      "UK": {
+        "Male": [
+          {
+            "source": "for you",
+            "users": 115,
+            "revenue": 7005.8,
+            "user_pct": 23.52,
+            "revenue_pct": 31.33
+          },
+          {
+            "source": "auto play",
+            "users": 124,
+            "revenue": 6085.51,
+            "user_pct": 25.36,
+            "revenue_pct": 27.22
+          },
+          {
+            "source": "deeplink",
+            "users": 110,
+            "revenue": 3165.93,
+            "user_pct": 22.49,
+            "revenue_pct": 14.16
+          },
+          {
+            "source": "player",
+            "users": 42,
+            "revenue": 1959.0,
+            "user_pct": 8.59,
+            "revenue_pct": 8.76
+          },
+          {
+            "source": "search",
+            "users": 35,
+            "revenue": 1637.43,
+            "user_pct": 7.16,
+            "revenue_pct": 7.32
+          }
+        ],
+        "Female": [
+          {
+            "source": "auto play",
+            "users": 203,
+            "revenue": 9779.86,
+            "user_pct": 29.51,
+            "revenue_pct": 39.69
+          },
+          {
+            "source": "for you",
+            "users": 122,
+            "revenue": 6021.55,
+            "user_pct": 17.73,
+            "revenue_pct": 24.44
+          },
+          {
+            "source": "deeplink",
+            "users": 171,
+            "revenue": 3703.66,
+            "user_pct": 24.85,
+            "revenue_pct": 15.03
+          },
+          {
+            "source": "player",
+            "users": 33,
+            "revenue": 1437.55,
+            "user_pct": 4.8,
+            "revenue_pct": 5.83
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 69,
+            "revenue": 1316.32,
+            "user_pct": 10.03,
+            "revenue_pct": 5.34
+          }
+        ]
+      },
+      "DE": {
+        "Male": [
+          {
+            "source": "for you",
+            "users": 10,
+            "revenue": 408.35,
+            "user_pct": 20.83,
+            "revenue_pct": 32.14
+          },
+          {
+            "source": "my_library",
+            "users": 3,
+            "revenue": 234.45,
+            "user_pct": 6.25,
+            "revenue_pct": 18.46
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 1,
+            "revenue": 194.12,
+            "user_pct": 2.08,
+            "revenue_pct": 15.28
+          },
+          {
+            "source": "deeplink",
+            "users": 13,
+            "revenue": 173.3,
+            "user_pct": 27.08,
+            "revenue_pct": 13.64
+          },
+          {
+            "source": "auto play",
+            "users": 15,
+            "revenue": 136.83,
+            "user_pct": 31.25,
+            "revenue_pct": 10.77
+          }
+        ],
+        "Female": [
+          {
+            "source": "for you",
+            "users": 15,
+            "revenue": 1242.01,
+            "user_pct": 27.78,
+            "revenue_pct": 61.54
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 12,
+            "revenue": 336.23,
+            "user_pct": 22.22,
+            "revenue_pct": 16.66
+          },
+          {
+            "source": "auto play",
+            "users": 11,
+            "revenue": 171.55,
+            "user_pct": 20.37,
+            "revenue_pct": 8.5
+          },
+          {
+            "source": "player",
+            "users": 3,
+            "revenue": 159.58,
+            "user_pct": 5.56,
+            "revenue_pct": 7.91
+          },
+          {
+            "source": "deeplink",
+            "users": 9,
+            "revenue": 95.42,
+            "user_pct": 16.67,
+            "revenue_pct": 4.73
+          }
+        ]
+      },
+      "RoW": {
+        "Male": [
+          {
+            "source": "auto play",
+            "users": 952,
+            "revenue": 25580.9,
+            "user_pct": 32.91,
+            "revenue_pct": 33.29
+          },
+          {
+            "source": "for you",
+            "users": 745,
+            "revenue": 18509.08,
+            "user_pct": 25.75,
+            "revenue_pct": 24.09
+          },
+          {
+            "source": "deeplink",
+            "users": 383,
+            "revenue": 9436.55,
+            "user_pct": 13.24,
+            "revenue_pct": 12.28
+          },
+          {
+            "source": "player",
+            "users": 244,
+            "revenue": 7473.32,
+            "user_pct": 8.43,
+            "revenue_pct": 9.73
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 188,
+            "revenue": 6923.45,
+            "user_pct": 6.5,
+            "revenue_pct": 9.01
+          }
+        ],
+        "Female": [
+          {
+            "source": "auto play",
+            "users": 1020,
+            "revenue": 24185.16,
+            "user_pct": 31.2,
+            "revenue_pct": 33.05
+          },
+          {
+            "source": "for you",
+            "users": 638,
+            "revenue": 15257.45,
+            "user_pct": 19.52,
+            "revenue_pct": 20.85
+          },
+          {
+            "source": "deeplink",
+            "users": 637,
+            "revenue": 10423.78,
+            "user_pct": 19.49,
+            "revenue_pct": 14.24
+          },
+          {
+            "source": "schedule_onboarding",
+            "users": 345,
+            "revenue": 8867.22,
+            "user_pct": 10.55,
+            "revenue_pct": 12.12
+          },
+          {
+            "source": "player",
+            "users": 250,
+            "revenue": 5995.49,
+            "user_pct": 7.65,
+            "revenue_pct": 8.19
+          }
+        ]
+      }
+    }
+  },
+  "discovery_by_locale_gender": {
+    "USA": {
+      "Male": [
+        {
+          "source": "auto play",
+          "users": 6930,
+          "revenue": 667484.91,
+          "user_pct": 34.68,
+          "revenue_pct": 34.8
+        },
+        {
+          "source": "for you",
+          "users": 5123,
+          "revenue": 546874.19,
+          "user_pct": 25.64,
+          "revenue_pct": 28.51
+        },
+        {
+          "source": "player",
+          "users": 1676,
+          "revenue": 177864.66,
+          "user_pct": 8.39,
+          "revenue_pct": 9.27
+        },
+        {
+          "source": "search",
+          "users": 1645,
+          "revenue": 150478.94,
+          "user_pct": 8.23,
+          "revenue_pct": 7.84
+        },
+        {
+          "source": "deeplink",
+          "users": 2047,
+          "revenue": 136477.22,
+          "user_pct": 10.24,
+          "revenue_pct": 7.11
+        }
+      ],
+      "Female": [
+        {
+          "source": "auto play",
+          "users": 9688,
+          "revenue": 658297.43,
+          "user_pct": 34.16,
+          "revenue_pct": 37.6
+        },
+        {
+          "source": "for you",
+          "users": 5617,
+          "revenue": 405419.63,
+          "user_pct": 19.8,
+          "revenue_pct": 23.16
+        },
+        {
+          "source": "search",
+          "users": 3057,
+          "revenue": 171604.57,
+          "user_pct": 10.78,
+          "revenue_pct": 9.8
+        },
+        {
+          "source": "player",
+          "users": 2467,
+          "revenue": 157952.52,
+          "user_pct": 8.7,
+          "revenue_pct": 9.02
+        },
+        {
+          "source": "deeplink",
+          "users": 3840,
+          "revenue": 154558.56,
+          "user_pct": 13.54,
+          "revenue_pct": 8.83
+        }
+      ]
+    },
+    "India": {
+      "Male": [
+        {
+          "source": "auto play",
+          "users": 71797,
+          "revenue": 419578.26,
+          "user_pct": 36.92,
+          "revenue_pct": 41.39
+        },
+        {
+          "source": "for you",
+          "users": 54726,
+          "revenue": 314868.02,
+          "user_pct": 28.14,
+          "revenue_pct": 31.06
+        },
+        {
+          "source": "deeplink",
+          "users": 27870,
+          "revenue": 87898.27,
+          "user_pct": 14.33,
+          "revenue_pct": 8.67
+        },
+        {
+          "source": "player",
+          "users": 15059,
+          "revenue": 82238.33,
+          "user_pct": 7.74,
+          "revenue_pct": 8.11
+        },
+        {
+          "source": "search",
+          "users": 10317,
+          "revenue": 41235.37,
+          "user_pct": 5.3,
+          "revenue_pct": 4.07
+        }
+      ],
+      "Female": [
+        {
+          "source": "auto play",
+          "users": 19845,
+          "revenue": 79704.52,
+          "user_pct": 34.0,
+          "revenue_pct": 37.49
+        },
+        {
+          "source": "for you",
+          "users": 18890,
+          "revenue": 73000.82,
+          "user_pct": 32.36,
+          "revenue_pct": 34.33
+        },
+        {
+          "source": "player",
+          "users": 4809,
+          "revenue": 18269.73,
+          "user_pct": 8.24,
+          "revenue_pct": 8.59
+        },
+        {
+          "source": "deeplink",
+          "users": 7259,
+          "revenue": 17487.84,
+          "user_pct": 12.44,
+          "revenue_pct": 8.22
+        },
+        {
+          "source": "search",
+          "users": 2806,
+          "revenue": 7830.21,
+          "user_pct": 4.81,
+          "revenue_pct": 3.68
+        }
+      ]
+    },
+    "UK": {
+      "Male": [
+        {
+          "source": "for you",
+          "users": 268,
+          "revenue": 24501.29,
+          "user_pct": 27.4,
+          "revenue_pct": 36.52
+        },
+        {
+          "source": "auto play",
+          "users": 285,
+          "revenue": 20514.49,
+          "user_pct": 29.14,
+          "revenue_pct": 30.58
+        },
+        {
+          "source": "player",
+          "users": 81,
+          "revenue": 5495.77,
+          "user_pct": 8.28,
+          "revenue_pct": 8.19
+        },
+        {
+          "source": "deeplink",
+          "users": 151,
+          "revenue": 4821.55,
+          "user_pct": 15.44,
+          "revenue_pct": 7.19
+        },
+        {
+          "source": "search",
+          "users": 75,
+          "revenue": 4468.29,
+          "user_pct": 7.67,
+          "revenue_pct": 6.66
+        }
+      ],
+      "Female": [
+        {
+          "source": "auto play",
+          "users": 445,
+          "revenue": 29362.26,
+          "user_pct": 33.64,
+          "revenue_pct": 38.46
+        },
+        {
+          "source": "for you",
+          "users": 296,
+          "revenue": 22693.51,
+          "user_pct": 22.37,
+          "revenue_pct": 29.72
+        },
+        {
+          "source": "player",
+          "users": 89,
+          "revenue": 5979.88,
+          "user_pct": 6.73,
+          "revenue_pct": 7.83
+        },
+        {
+          "source": "deeplink",
+          "users": 216,
+          "revenue": 5846.38,
+          "user_pct": 16.33,
+          "revenue_pct": 7.66
+        },
+        {
+          "source": "search",
+          "users": 130,
+          "revenue": 4901.16,
+          "user_pct": 9.83,
+          "revenue_pct": 6.42
+        }
+      ]
+    },
+    "DE": {
+      "Male": [
+        {
+          "source": "for you",
+          "users": 17,
+          "revenue": 899.57,
+          "user_pct": 23.94,
+          "revenue_pct": 33.33
+        },
+        {
+          "source": "auto play",
+          "users": 23,
+          "revenue": 624.64,
+          "user_pct": 32.39,
+          "revenue_pct": 23.14
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 3,
+          "revenue": 436.89,
+          "user_pct": 4.23,
+          "revenue_pct": 16.19
+        },
+        {
+          "source": "deeplink",
+          "users": 15,
+          "revenue": 309.88,
+          "user_pct": 21.13,
+          "revenue_pct": 11.48
+        },
+        {
+          "source": "my_library",
+          "users": 4,
+          "revenue": 254.4,
+          "user_pct": 5.63,
+          "revenue_pct": 9.43
+        }
+      ],
+      "Female": [
+        {
+          "source": "for you",
+          "users": 28,
+          "revenue": 3803.46,
+          "user_pct": 32.56,
+          "revenue_pct": 58.45
+        },
+        {
+          "source": "auto play",
+          "users": 21,
+          "revenue": 792.51,
+          "user_pct": 24.42,
+          "revenue_pct": 12.18
+        },
+        {
+          "source": "my_library",
+          "users": 3,
+          "revenue": 716.25,
+          "user_pct": 3.49,
+          "revenue_pct": 11.01
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 13,
+          "revenue": 639.23,
+          "user_pct": 15.12,
+          "revenue_pct": 9.82
+        },
+        {
+          "source": "search",
+          "users": 6,
+          "revenue": 266.35,
+          "user_pct": 6.98,
+          "revenue_pct": 4.09
+        }
+      ]
+    },
+    "RoW": {
+      "Male": [
+        {
+          "source": "auto play",
+          "users": 1651,
+          "revenue": 70523.1,
+          "user_pct": 34.72,
+          "revenue_pct": 34.44
+        },
+        {
+          "source": "for you",
+          "users": 1364,
+          "revenue": 66390.51,
+          "user_pct": 28.69,
+          "revenue_pct": 32.42
+        },
+        {
+          "source": "player",
+          "users": 401,
+          "revenue": 19064.87,
+          "user_pct": 8.43,
+          "revenue_pct": 9.31
+        },
+        {
+          "source": "deeplink",
+          "users": 467,
+          "revenue": 13291.2,
+          "user_pct": 9.82,
+          "revenue_pct": 6.49
+        },
+        {
+          "source": "my_library",
+          "users": 231,
+          "revenue": 11771.81,
+          "user_pct": 4.86,
+          "revenue_pct": 5.75
+        }
+      ],
+      "Female": [
+        {
+          "source": "auto play",
+          "users": 1893,
+          "revenue": 66656.01,
+          "user_pct": 35.25,
+          "revenue_pct": 36.04
+        },
+        {
+          "source": "for you",
+          "users": 1221,
+          "revenue": 51477.88,
+          "user_pct": 22.74,
+          "revenue_pct": 27.83
+        },
+        {
+          "source": "player",
+          "users": 424,
+          "revenue": 14201.35,
+          "user_pct": 7.9,
+          "revenue_pct": 7.68
+        },
+        {
+          "source": "deeplink",
+          "users": 738,
+          "revenue": 13736.59,
+          "user_pct": 13.74,
+          "revenue_pct": 7.43
+        },
+        {
+          "source": "schedule_onboarding",
+          "users": 422,
+          "revenue": 12692.02,
+          "user_pct": 7.86,
+          "revenue_pct": 6.86
+        }
+      ]
+    }
+  }
+};
+        
+        // Tab navigation
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        function showInterventionTab(tabId) {
+            document.querySelectorAll('.intervention-content').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('intervention-' + tabId).style.display = 'block';
+            event.target.classList.add('active');
+        }
+        
+        // Format helpers
+        function formatNumber(n) { return n ? Math.round(n).toLocaleString() : '0'; }
+        function formatCurrency(n) { return n ? '$' + Math.round(n).toLocaleString() : '$0'; }
+        function formatPercent(n) { return n ? n.toFixed(1) + '%' : '0%'; }
+        function truncateShow(name, len = 30) { return name && name.length > len ? name.substring(0, len) + '...' : (name || 'N/A'); }
+        
+        // Initialize charts
+        const chartColors = {
+            primary: ['#1a365d', '#2c5282', '#4a90a4', '#63b3ed', '#90cdf4'],
+            accent: ['#e8b04b', '#f6e05e', '#faf089'],
+            mixed: ['#4a90a4', '#e8b04b', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b', '#06b6d4']
+        };
+        
+        // Revenue by Region Chart
+        new Chart(document.getElementById('revenueByRegionChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['USA', 'India', 'UK', 'Germany', 'RoW'],
+                datasets: [{
+                    data: [3690000, 1240000, 144000, 9200, 392000],
+                    backgroundColor: chartColors.mixed
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#94a3b8' } },
+                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + formatCurrency(ctx.raw) } }
+                }
+            }
+        });
+        
+        // Users by Region Chart
+        new Chart(document.getElementById('usersByRegionChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['USA', 'India', 'UK', 'Germany', 'RoW'],
+                datasets: [{
+                    data: [4300000, 65800000, 276000, 40000, 5100000],
+                    backgroundColor: chartColors.mixed
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#94a3b8' } },
+                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + formatNumber(ctx.raw) } }
+                }
+            }
+        });
+        
+        // Revenue by Segment Chart
+        new Chart(document.getElementById('revenueBySegmentChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Whale+ Payer', 'Non-Whale Payer'],
+                datasets: [{
+                    data: [3380000, 2090000],
+                    backgroundColor: ['#4a90a4', '#e8b04b']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#94a3b8' } },
+                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + formatCurrency(ctx.raw) } }
+                }
+            }
+        });
+        
+        // ARPPU by Region Chart
+        new Chart(document.getElementById('arppuByRegionChart'), {
+            type: 'bar',
+            data: {
+                labels: ['USA', 'UK', 'Germany', 'RoW', 'India'],
+                datasets: [{
+                    label: 'ARPPU',
+                    data: [75.90, 62.29, 57.93, 38.36, 4.85],
+                    backgroundColor: chartColors.mixed,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => 'ARPPU: $' + ctx.raw.toFixed(2) } }
+                },
+                scales: {
+                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+        
+        // Users by Segment Chart
+        new Chart(document.getElementById('usersBySegmentChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Whale+ Payer', 'Whale+ Non-Payer', 'Non-Whale Payer', 'Non-Whale Non-Payer'],
+                datasets: [{
+                    data: [122000, 1000000, 194000, 74300000],
+                    backgroundColor: chartColors.mixed
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#94a3b8' } },
+                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + formatNumber(ctx.raw) } }
+                }
+            }
+        });
+        
+        // Completion by Segment Chart
+        new Chart(document.getElementById('completionBySegmentChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Whale+ Payer', 'Whale+ Non-Payer', 'Non-Whale Payer', 'Non-Whale Non-Payer'],
+                datasets: [
+                    { label: 'Acq Show 10hr+', data: [35.9, 25.8, 28.3, 15.6], backgroundColor: '#4a90a4' },
+                    { label: 'Acq Show 50%+', data: [4.4, 3.2, 3.8, 2.1], backgroundColor: '#e8b04b' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { color: '#94a3b8' } },
+                    tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw + '%' } }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+        
+        // Revenue by Gender Chart
+        new Chart(document.getElementById('revenueByGenderChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Male', 'Female'],
+                datasets: [{
+                    data: [2890000, 2590000],
+                    backgroundColor: ['#4a90a4', '#e8b04b']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#94a3b8' } },
+                    tooltip: { callbacks: { label: ctx => ctx.label + ': ' + formatCurrency(ctx.raw) } }
+                }
+            }
+        });
+        
+        // ARPPU by Gender Chart
+        new Chart(document.getElementById('arppuByGenderChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Female', 'Male'],
+                datasets: [{
+                    label: 'ARPPU',
+                    data: [23.83, 14.54],
+                    backgroundColor: ['#e8b04b', '#4a90a4'],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+        
+        // Revenue by Age Chart
+        new Chart(document.getElementById('revenueByAgeChart'), {
+            type: 'bar',
+            data: {
+                labels: ['19-25', '26-35', '36-45', '46-55', '56-65', '65+'],
+                datasets: [{
+                    label: 'Revenue',
+                    data: [980000, 1250000, 1320000, 1100000, 650000, 180000],
+                    backgroundColor: chartColors.mixed,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', callback: v => '$' + (v/1000000).toFixed(1) + 'M' } }
+                }
+            }
+        });
+        
+        // ARPPU by Age Chart
+        new Chart(document.getElementById('arppuByAgeChart'), {
+            type: 'bar',
+            data: {
+                labels: ['56-65', '46-55', '65+', '36-45', '26-35', '19-25'],
+                datasets: [{
+                    label: 'ARPPU',
+                    data: [52.12, 38.45, 35.20, 22.37, 15.80, 12.50],
+                    backgroundColor: chartColors.mixed,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+        
+        // Discovery Charts
+        new Chart(document.getElementById('revenueByDiscoveryChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Auto Play', 'For You', 'Search', 'My Library', 'Player', 'Deeplink', 'Show Reviews'],
+                datasets: [{
+                    label: 'Revenue',
+                    data: [2020000, 1520000, 405000, 217000, 180000, 150000, 5900],
+                    backgroundColor: chartColors.mixed,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', callback: v => '$' + (v/1000000).toFixed(1) + 'M' } }
+                }
+            }
+        });
+        
+        new Chart(document.getElementById('revPerUserDiscoveryChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Show Reviews', 'My Library', 'Search', 'Auto Play', 'For You', 'Player', 'Deeplink'],
+                datasets: [{
+                    label: 'Rev/User',
+                    data: [80.24, 38.98, 21.57, 17.87, 17.25, 15.20, 12.50],
+                    backgroundColor: chartColors.mixed,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+        
+        // Populate tables and micro-segment displays
+        function populateTopShowsOverall() {
+            const tbody = document.getElementById('topShowsOverallTable');
+            const shows = microSegmentData.top_shows_overall || [];
+            tbody.innerHTML = shows.map((s, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${truncateShow(s.show, 40)}</td>
+                    <td>${s.genre}</td>
+                    <td>${formatCurrency(s.revenue)}</td>
+                    <td>${formatPercent(s.revenue_pct)}</td>
+                    <td>${formatNumber(s.users)}</td>
+                    <td>${formatPercent(s.user_pct)}</td>
+                </tr>
+            `).join('');
+        }
+        
+        function populateDiscoveryOverall() {
+            const tbody = document.getElementById('discoveryOverallTable');
+            const sources = microSegmentData.discovery_overall || [];
+            tbody.innerHTML = sources.map(d => `
+                <tr>
+                    <td>${d.source}</td>
+                    <td>${formatNumber(d.users)}</td>
+                    <td>${formatCurrency(d.revenue)}</td>
+                    <td>${formatPercent(d.revenue_pct)}</td>
+                    <td>${formatPercent(d.user_pct)}</td>
+                    <td>${formatCurrency(d.rev_per_user)}</td>
+                </tr>
+            `).join('');
+        }
+        
+        function updateShowsDisplay() {
+            const segFilter = document.getElementById('showSegmentFilter').value;
+            const locFilter = document.getElementById('showLocaleFilter').value;
+            const genFilter = document.getElementById('showGenderFilter').value;
+            
+            const container = document.getElementById('microSegmentShowsContainer');
+            container.innerHTML = '';
+            
+            const segments = {
+                'whale': '1. Past Whale+ / Current Payer',
+                'nonwhale': '3. Past Non-Whale / Current Payer'
+            };
+            const locales = ['USA', 'India', 'UK', 'DE', 'RoW'];
+            const genders = ['Male', 'Female'];
+            
+            const segsToShow = segFilter === 'all' ? Object.values(segments) : [segments[segFilter]];
+            const locsToShow = locFilter === 'all' ? locales : [locFilter];
+            const gensToShow = genFilter === 'all' ? genders : [genFilter];
+            
+            segsToShow.forEach(seg => {
+                const segData = microSegmentData.top_shows_by_microsegment?.[seg] || {};
+                const segLabel = seg.includes('Whale+') ? 'Whale+ Payer' : 'Non-Whale Payer';
+                
+                locsToShow.forEach(loc => {
+                    const locData = segData[loc] || {};
+                    
+                    gensToShow.forEach(gen => {
+                        const shows = locData[gen] || [];
+                        if (shows.length > 0) {
+                            container.innerHTML += `
+                                <div class="micro-card">
+                                    <div class="micro-card-header">
+                                        <span class="micro-card-title">${loc} - ${gen}</span>
+                                        <span class="badge ${seg.includes('Whale+') ? 'badge-primary' : 'badge-accent'}">${segLabel}</span>
+                                    </div>
+                                    <table class="micro-table">
+                                        <thead><tr><th>Show</th><th>Rev</th><th>Rev%</th><th>Users</th></tr></thead>
+                                        <tbody>
+                                            ${shows.slice(0, 5).map(s => `
+                                                <tr>
+                                                    <td>${truncateShow(s.show, 25)}</td>
+                                                    <td>${formatCurrency(s.revenue)}</td>
+                                                    <td>${formatPercent(s.revenue_pct)}</td>
+                                                    <td>${formatNumber(s.users)}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `;
+                        }
+                    });
+                });
+            });
+        }
+        
+        function updateDiscoveryDisplay() {
+            const segFilter = document.getElementById('discSegmentFilter').value;
+            const locFilter = document.getElementById('discLocaleFilter').value;
+            const genFilter = document.getElementById('discGenderFilter').value;
+            
+            const container = document.getElementById('microSegmentDiscoveryContainer');
+            container.innerHTML = '';
+            
+            const segments = {
+                'whale': '1. Past Whale+ / Current Payer',
+                'nonwhale': '3. Past Non-Whale / Current Payer'
+            };
+            const locales = ['USA', 'India', 'UK', 'DE', 'RoW'];
+            const genders = ['Male', 'Female'];
+            
+            const segsToShow = segFilter === 'all' ? Object.values(segments) : [segments[segFilter]];
+            const locsToShow = locFilter === 'all' ? locales : [locFilter];
+            const gensToShow = genFilter === 'all' ? genders : [genFilter];
+            
+            segsToShow.forEach(seg => {
+                const segData = microSegmentData.discovery_by_microsegment?.[seg] || {};
+                const segLabel = seg.includes('Whale+') ? 'Whale+ Payer' : 'Non-Whale Payer';
+                
+                locsToShow.forEach(loc => {
+                    const locData = segData[loc] || {};
+                    
+                    gensToShow.forEach(gen => {
+                        const sources = locData[gen] || [];
+                        if (sources.length > 0) {
+                            container.innerHTML += `
+                                <div class="micro-card">
+                                    <div class="micro-card-header">
+                                        <span class="micro-card-title">${loc} - ${gen}</span>
+                                        <span class="badge ${seg.includes('Whale+') ? 'badge-primary' : 'badge-accent'}">${segLabel}</span>
+                                    </div>
+                                    <table class="micro-table">
+                                        <thead><tr><th>Source</th><th>Rev</th><th>Rev%</th><th>Users</th></tr></thead>
+                                        <tbody>
+                                            ${sources.slice(0, 5).map(d => `
+                                                <tr>
+                                                    <td>${d.source}</td>
+                                                    <td>${formatCurrency(d.revenue)}</td>
+                                                    <td>${formatPercent(d.revenue_pct)}</td>
+                                                    <td>${formatNumber(d.users)}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `;
+                        }
+                    });
+                });
+            });
+        }
+        
+        // Initialize on load
+        populateTopShowsOverall();
+        populateDiscoveryOverall();
+        updateShowsDisplay();
+        updateDiscoveryDisplay();
+    </script>
+</body>
+</html>
